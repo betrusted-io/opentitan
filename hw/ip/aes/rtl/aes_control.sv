@@ -381,6 +381,7 @@ module aes_control (
   assign data_out_clear_o    = 1'b0;
 
   // Selectors must be known/valid
+`ifdef NOT_XILINX
   `ASSERT_KNOWN(AesModeKnown, mode_i, clk_i, !rst_ni)
   `ASSERT(AesKeyLenValid, key_len_i inside {
       AES_128,
@@ -394,5 +395,6 @@ module aes_control (
       FINISH,
       CLEAR
       }, clk_i, !rst_ni)
+`endif
 
 endmodule

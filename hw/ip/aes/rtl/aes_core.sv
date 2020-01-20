@@ -403,6 +403,7 @@ module aes_core #(
   ////////////////
 
   // Selectors must be known/valid
+`ifdef NOT_XILINX
   `ASSERT_KNOWN(AesModeKnown, mode_q, clk_i, !rst_ni)
   `ASSERT(AesKeyLenValid, key_len_q inside {
       AES_128,
@@ -423,6 +424,7 @@ module aes_core #(
   `ASSERT_KNOWN(AesKeyFullSelKnown, key_full_sel, clk_i, !rst_ni)
   `ASSERT_KNOWN(AesKeyDecSelKnown, key_dec_sel, clk_i, !rst_ni)
   `ASSERT_KNOWN(AesKeyWordsSelKnown, key_words_sel, clk_i, !rst_ni)
-  `ASSERT_KNOWN(AesRoundKeySelKnown, round_key_sel, clk_i, !rst_ni)
+  `ASSERT_KNOWN(AesRoundKeySelKnown, round_key_sel, clk_i, !rst_ni)*/
+`endif
 
 endmodule

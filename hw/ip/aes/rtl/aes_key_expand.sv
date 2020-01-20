@@ -328,11 +328,13 @@ module aes_key_expand #(
   assign key_o = regular;
 
   // Selectors must be known/valid
+`ifdef NOT_XILINX
   `ASSERT_KNOWN(AesModeKnown, mode_i, clk_i, !rst_ni)
   `ASSERT(AesKeyLenValid, key_len_i inside {
       AES_128,
       AES_192,
       AES_256
       }, clk_i, !rst_ni)
+`endif
 
 endmodule
