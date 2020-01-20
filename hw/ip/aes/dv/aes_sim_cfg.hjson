@@ -1,0 +1,51 @@
+// Copyright lowRISC contributors.
+// Licensed under the Apache License, Version 2.0, see LICENSE for details.
+// SPDX-License-Identifier: Apache-2.0
+{
+  // Name of the sim cfg - typically same as the name of the DUT.
+  name: aes
+
+  // Top level dut name (sv module).
+  dut: aes
+
+  // Top level testbench name (sv module).
+  tb: tb
+
+  // Fusesoc core file used for building the file list.
+  fusesoc_core: lowrisc:dv:aes_sim:0.1
+
+  // Testplan hjson file.
+  testplan: "{proj_root}/hw/ip/aes/data/aes_testplan.hjson"
+
+  // RAL spec - used to generate the RAL model.
+  ral_spec: "{proj_root}/hw/ip/aes/data/aes.hjson"
+
+  // Import additional common sim cfg files.
+  import_cfgs: [// Project wide common sim cfg file
+                "{proj_root}/hw/dv/data/common_sim_cfg.hjson",
+                // Common CIP test lists
+                "{proj_root}/hw/dv/data/tests/csr_tests.hjson",
+                "{proj_root}/hw/dv/data/tests/intr_test.hjson",
+                "{proj_root}/hw/dv/data/tests/tl_access_tests.hjson",
+                "{proj_root}/hw/dv/data/tests/stress_tests.hjson"]
+
+  // Default iterations for all tests - each test entry can override this.
+  reseed: 50
+
+  // Default UVM test and seq class name.
+  uvm_test: aes_base_test
+  uvm_test_seq: aes_wake_up_vseq
+
+  // List of test specifications.
+  tests: [
+    {
+      name: aes_wakeup_test
+      uvm_test_seq: aes_wake_up_vseq
+    }
+
+    {
+      name: aes_sanity
+      uvm_test_seq: aes_sanity_vseq
+    }
+  ]
+}
