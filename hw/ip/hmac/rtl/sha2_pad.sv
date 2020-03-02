@@ -307,9 +307,11 @@ module sha2_pad import hmac_pkg::*; (
   // State machine is in Idle only when it meets tx_count == message length
   assign msg_feed_complete = hash_process_flag && (st_q == StIdle);
 
+`ifdef NOT_XILINX
   // When fifo_partial, fifo shouldn't be empty and hash_process was set
   `ASSERT(ValidPartialConditionAssert,
           fifo_partial && fifo_rvalid |-> hash_process_flag,
           clk_i, !rst_ni)
+`endif
 
 endmodule

@@ -59,7 +59,7 @@ module prim_packer #(
     end else if (flush_ready) begin
       pos <= '0;
     end else if (ack_out) begin
-      `ASSERT_I(pos_next_gte_outw_p, pos_next >= OutW)
+//      `ASSERT_I(pos_next_gte_outw_p, pos_next >= OutW)
       pos <= pos_next - OutW;
     end else if (ack_in) begin
       pos <= pos_next;
@@ -191,6 +191,7 @@ module prim_packer #(
   // TODO: Implement Pipelined logic
   //       Need to change pos logic, mask&data calculation logic too
 
+`ifdef NOT_XILINX
   //////////////////////////////////////////////
   // Assertions, Assumptions, and Coverpoints //
   //////////////////////////////////////////////
@@ -257,5 +258,6 @@ module prim_packer #(
           ($past(lod_idx)+OutW-$countones($past(stored_mask))))
             == stored_mask,
           clk_i, !rst_ni)
+`endif
 
 endmodule
