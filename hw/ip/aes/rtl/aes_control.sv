@@ -489,7 +489,6 @@ module aes_control (
   assign prng_reseed_o    = 1'b0;
 
   // Selectors must be known/valid
-<<<<<<< HEAD
 `ifdef NOT_XILINX
   `ASSERT(AesModeValid, mode_i inside {
       AES_ECB,
