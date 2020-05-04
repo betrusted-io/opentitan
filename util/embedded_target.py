@@ -18,26 +18,46 @@ def run_objdump(objdump, input, basename, outdir):
     filename = basename + '.dis'
     output = os.path.join(outdir, filename)
     f = open(output, "w")
-    cmd = [objdump, '-SDhl', input, ]
+    cmd = [
+        objdump,
+        '--disassemble-all',
+        '--headers',
+        '--line-numbers',
+        '--source',
+        input,
+    ]
     subprocess.run(cmd, stdout=f, check=True)
     return output
+
 
 def run_objcopy(objcopy, input, basename, outdir):
     filename = basename + '.bin'
     output = os.path.join(outdir, filename)
-    cmd = [objcopy, '-O', 'binary', input, output]
+    cmd = [
+        objcopy,
+        '--output-target', 'binary',
+        input, output,
+    ]
     subprocess.run(cmd, check=True)
     return output
 
 
-def run_srec_cat(srec_cat, input, basename, outdir):
-    # TODO: Replace command for objcopy once this bug is fixed and released.
+def run_srec_cat(srec_cat, input, basename, outdir, word_size_bytes):
+    # TODO: Replace command for objcopy if endianess issues can be solved
     # https://github.com/lowRISC/opentitan/issues/1107
-    filename = basename + '.vmem'
+    filename = basename + '.' + str(word_size_bytes * 8) + '.vmem'
     output = os.path.join(outdir, filename)
     cmd = [
-        srec_cat, input, '-binary', '-offset', '0x0', '-byte-swap', '4', '-o',
-        output, '-vmem'
+        srec_cat,
+        # Input is to be interpreted as a pure binary
+        input, '--binary',
+        # Reverse the endianness of every word
+        '--offset', '0x0', '--byte-swap', str(word_size_bytes),
+        # Fill the entire range with garbage, to pad it up to a
+        # word alignment
+        '--fill', '0xff', '-within', input, '-binary', '-range-pad', str(word_size_bytes),
+        # Output as VMem file with specified word size
+        '--output', output, '--vmem', str(word_size_bytes * 8),
     ]
     subprocess.run(cmd, check=True)
 
@@ -81,7 +101,10 @@ def main():
 
     bin_file = run_objcopy(args.objcopy, args.input, args.basename, args.outdir)
     run_objdump(args.objdump, args.input, args.basename, args.outdir)
-    run_srec_cat(args.srec_cat, bin_file, args.basename, args.outdir)
+    run_srec_cat(args.srec_cat, bin_file, args.basename, args.outdir,
+            word_size_bytes=4)
+    run_srec_cat(args.srec_cat, bin_file, args.basename, args.outdir,
+            word_size_bytes=8)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
 
 class ${name}_agent_cfg extends dv_base_agent_cfg;
 
-// interface handle used by driver, monitor & the sequencer, via cfg handle
+  // interface handle used by driver, monitor & the sequencer, via cfg handle
   virtual ${name}_if vif;
 
   `uvm_object_utils_begin(${name}_agent_cfg)

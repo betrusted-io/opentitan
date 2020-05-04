@@ -4,8 +4,10 @@
 //
 // HMAC-SHA256
 
+`include "prim_assert.sv"
+
 module hmac
-  import prim_pkg::*;
+  import prim_alert_pkg::*;
   import hmac_pkg::*;
   import hmac_reg_pkg::*;
 (
@@ -16,7 +18,7 @@ module hmac
   output tlul_pkg::tl_d2h_t tl_o,
 
   output logic intr_hmac_done_o,
-  output logic intr_fifo_full_o,
+  output logic intr_fifo_empty_o,
   output logic intr_hmac_err_o,
 
   // alerts
@@ -99,6 +101,7 @@ module hmac
 
   hmac_reg2hw_cfg_reg_t cfg_reg;
   logic                 cfg_block;  // Prevent changing config
+  logic                 msg_allowed; // MSG_FIFO from software is allowed
 
   ///////////////////////
   // Connect registers //
@@ -156,7 +159,7 @@ module hmac
   /////////////////////
   // Control signals //
   /////////////////////
-  assign hash_start = reg_hash_start & sha_en;
+  assign hash_start = reg_hash_start & sha_en & ~cfg_block;
 
   always_ff @(posedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
@@ -175,20 +178,32 @@ module hmac
       cfg_reg <= reg2hw.cfg ;
     end
   end
+
+  // Open up the MSG_FIFO from the TL-UL port when it is ready
+  always_ff @(posedge clk_i or negedge rst_ni) begin
+    if (!rst_ni) begin
+      msg_allowed <= '0;
+    end else if (hash_start) begin
+      msg_allowed <= 1'b 1;
+    end else if (packer_flush_done) begin
+      msg_allowed <= 1'b 0;
+    end
+  end
   ////////////////
   // Interrupts //
   ////////////////
-  logic fifo_full_q;
+  logic fifo_empty_q, fifo_empty_event;
   always_ff @(posedge clk_i or negedge rst_ni) begin
-    if (!rst_ni) fifo_full_q <= 1'b0;
-    else fifo_full_q <= fifo_full;
+    if (!rst_ni) begin
+      fifo_empty_q <= '1; // By default, it is empty
+    end else if (!hmac_fifo_wsel) begin
+      fifo_empty_q <= fifo_empty;
+    end
   end
-
-  logic fifo_full_event;
-  assign fifo_full_event = fifo_full & !fifo_full_q;
+  assign fifo_empty_event = fifo_empty & ~fifo_empty_q;
 
   logic [2:0] event_intr;
-  assign event_intr = {err_valid, fifo_full_event, reg_hash_done};
+  assign event_intr = {err_valid, fifo_empty_event, reg_hash_done};
 
   // instantiate interrupt hardware primitive
   prim_intr_hw #(.Width(1)) intr_hw_hmac_done (
@@ -201,15 +216,15 @@ module hmac
     .hw2reg_intr_state_d_o  (hw2reg.intr_state.hmac_done.d),
     .intr_o                 (intr_hmac_done_o)
   );
-  prim_intr_hw #(.Width(1)) intr_hw_fifo_full (
+  prim_intr_hw #(.Width(1)) intr_hw_fifo_empty (
     .event_intr_i           (event_intr[1]),
-    .reg2hw_intr_enable_q_i (reg2hw.intr_enable.fifo_full.q),
-    .reg2hw_intr_test_q_i   (reg2hw.intr_test.fifo_full.q),
-    .reg2hw_intr_test_qe_i  (reg2hw.intr_test.fifo_full.qe),
-    .reg2hw_intr_state_q_i  (reg2hw.intr_state.fifo_full.q),
-    .hw2reg_intr_state_de_o (hw2reg.intr_state.fifo_full.de),
-    .hw2reg_intr_state_d_o  (hw2reg.intr_state.fifo_full.d),
-    .intr_o                 (intr_fifo_full_o)
+    .reg2hw_intr_enable_q_i (reg2hw.intr_enable.fifo_empty.q),
+    .reg2hw_intr_test_q_i   (reg2hw.intr_test.fifo_empty.q),
+    .reg2hw_intr_test_qe_i  (reg2hw.intr_test.fifo_empty.qe),
+    .reg2hw_intr_state_q_i  (reg2hw.intr_state.fifo_empty.q),
+    .hw2reg_intr_state_de_o (hw2reg.intr_state.fifo_empty.de),
+    .hw2reg_intr_state_d_o  (hw2reg.intr_state.fifo_empty.d),
+    .intr_o                 (intr_fifo_empty_o)
   );
   prim_intr_hw #(.Width(1)) intr_hw_hmac_err (
     .event_intr_i           (event_intr[2]),
@@ -289,14 +304,14 @@ module hmac
   // TL-UL to MSG_FIFO byte write handling
   logic msg_write;
 
-  assign msg_write = msg_fifo_req & msg_fifo_we & ~hmac_fifo_wsel;
+  assign msg_write = msg_fifo_req & msg_fifo_we & ~hmac_fifo_wsel & msg_allowed;
 
   logic [$clog2(32+1)-1:0] wmask_ones;
 
   always_comb begin
     wmask_ones = '0;
     for (int i = 0 ; i < 32 ; i++) begin
-      wmask_ones = wmask_ones + reg_fifo_wmask[i];
+      wmask_ones = wmask_ones + msg_fifo_wmask[i];
     end
   end
 
@@ -306,7 +321,7 @@ module hmac
       message_length <= '0;
     end else if (hash_start) begin
       message_length <= '0;
-    end else if (reg_fifo_wvalid && fifo_wready && !hmac_fifo_wsel) begin
+    end else if (msg_write && sha_en && packer_ready) begin
       message_length <= message_length + 64'(wmask_ones);
     end
   end
@@ -423,8 +438,12 @@ module hmac
   // HMAC Error Handling //
   /////////////////////////
   logic msg_push_sha_disabled, hash_start_sha_disabled, update_seckey_inprocess;
+  logic hash_start_active;  // `reg_hash_start` set when hash already in active
+  logic msg_push_not_allowed; // Message is received when `hash_start` isn't set
   assign msg_push_sha_disabled = msg_write & ~sha_en;
   assign hash_start_sha_disabled = reg_hash_start & ~sha_en;
+  assign hash_start_active = reg_hash_start & cfg_block;
+  assign msg_push_not_allowed = msg_fifo_req & ~msg_allowed;
 
   always_comb begin
     update_seckey_inprocess = 1'b0;
@@ -445,7 +464,8 @@ module hmac
   // is pending to avoid any race conditions.
   assign err_valid = ~reg2hw.intr_state.hmac_err.q &
                    ( msg_push_sha_disabled | hash_start_sha_disabled
-                   | update_seckey_inprocess);
+                   | update_seckey_inprocess | hash_start_active
+                   | msg_push_not_allowed );
 
   always_comb begin
     err_code = NoError;
@@ -459,6 +479,14 @@ module hmac
 
       update_seckey_inprocess: begin
         err_code = SwUpdateSecretKeyInProcess;
+      end
+
+      hash_start_active: begin
+        err_code = SwHashStartWhenActive;
+      end
+
+      msg_push_not_allowed: begin
+        err_code = SwPushMsgWhenDisallowed;
       end
 
       default: begin
@@ -521,30 +549,29 @@ module hmac
 
   // the host doesn't write data after hash_process until hash_start.
   // Same as "message_length shouldn't be changed between hash_process and done
-  `ASSERT(ValidWriteAssert, msg_fifo_req |-> !in_process, clk_i, !rst_ni)
+  `ASSERT(ValidWriteAssert, msg_fifo_req |-> !in_process)
 
   // `hash_process` shall be toggle and paired with `hash_start`.
-  `ASSERT(ValidHashStartAssert, hash_start |-> !initiated, clk_i, !rst_ni)
-  `ASSERT(ValidHashProcessAssert, reg_hash_process |-> initiated, clk_i, !rst_ni)
+  // Below condition is covered by the design (2020-02-19)
+  //`ASSERT(ValidHashStartAssert, hash_start |-> !initiated)
+  `ASSERT(ValidHashProcessAssert, reg_hash_process |-> initiated)
 
   // between `hash_done` and `hash_start`, message FIFO should be empty
   `ASSERT(MsgFifoEmptyWhenNoOpAssert,
-          !in_process && !initiated |-> $stable(message_length),
-          clk_i, !rst_ni)
+          !in_process && !initiated |-> $stable(message_length))
 
   // hmac_en should be modified only when the logic is Idle
   `ASSERT(ValidHmacEnConditionAssert,
-          hmac_en != $past(hmac_en) |-> !in_process && !initiated,
-          clk_i, !rst_ni)
+          hmac_en != $past(hmac_en) |-> !in_process && !initiated)
 
   // All outputs should be known value after reset
-  `ASSERT_KNOWN(IntrHmacDoneOKnown, intr_hmac_done_o, clk_i, !rst_ni)
-  `ASSERT_KNOWN(IntrFifoFullOKnown, intr_fifo_full_o, clk_i, !rst_ni)
-  `ASSERT_KNOWN(TlODValidKnown, tl_o.d_valid, clk_i, !rst_ni)
-  `ASSERT_KNOWN(TlOAReadyKnown, tl_o.a_ready, clk_i, !rst_ni)
+  `ASSERT_KNOWN(IntrHmacDoneOKnown, intr_hmac_done_o)
+  `ASSERT_KNOWN(IntrFifoEmptyOKnown, intr_fifo_empty_o)
+  `ASSERT_KNOWN(TlODValidKnown, tl_o.d_valid)
+  `ASSERT_KNOWN(TlOAReadyKnown, tl_o.a_ready)
 
   // Alert outputs
-  `ASSERT_KNOWN(AlertTxOKnown, alert_tx_o, clk_i, !rst_ni)
+  `ASSERT_KNOWN(AlertTxOKnown, alert_tx_o)
 
 `endif // SYNTHESIS
 `endif // VERILATOR

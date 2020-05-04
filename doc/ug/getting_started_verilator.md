@@ -25,13 +25,13 @@ There are 3 memory types: ROM, RAM and Flash.
 By default, the system will first execute out of ROM and then jump to flash.
 A program needs to be built for each until ROM functionality for code download is ready.
 
-For that purpose compile the demo program with "simulation" settings, which adjusts the frequencies to better match the simulation speed. 
+For that purpose compile the demo program with "simulation" settings, which adjusts the frequencies to better match the simulation speed.
 For more information on building software targets refer to the [Software Getting Started Guide]({{< relref "getting_started_sw.md" >}}).
 
 ```console
 $ cd $REPO_TOP
 $ ./meson_init.sh
-$ ninja -C build-out/sw/sim-verilator all
+$ ninja -C build-out all
 ```
 
 Now the simulation can be run.
@@ -40,8 +40,8 @@ The programs listed after `--meminit` are loaded into the system's specified mem
 ```console
 $ cd $REPO_TOP
 $ build/lowrisc_systems_top_earlgrey_verilator_0.1/sim-verilator/Vtop_earlgrey_verilator \
-  --meminit=rom,build-bin/sw/device/sim-verilator/boot_rom/boot_rom.elf \
-  --meminit=flash,build-bin/sw/device/sim-verilator/examples/hello_world/hello_world.elf
+  --meminit=rom,build-bin/sw/device/boot_rom/boot_rom_sim_verilator.elf \
+  --meminit=flash,build-bin/sw/device/examples/hello_world/hello_world_sim_verilator.elf
 ```
 
 To stop the simulation press CTRL-c.
@@ -105,12 +105,8 @@ To connect GDB use the following command (noting it needs to be altered to point
 
 ```console
 $ riscv32-unknown-elf-gdb -ex "target extended-remote :3333" -ex "info reg" \
-  build-bin/sw/device/sim-verilator/examples/hello_world/hello_world.elf
+  build-bin/sw/device/examples/hello_world/hello_world_sim_verilator.elf
 ```
-
-Note that debug support is not yet mature (see https://github.com/lowRISC/opentitan/issues/574).
-In particular GDB cannot set breakpoints as it can't write to the (emulated) flash memory.
-HW breakpoint support is planned for Ibex to allow breakpointing code in flash.
 
 You can also run the debug compliance test suite built into OpenOCD.
 
@@ -166,8 +162,8 @@ Tracing slows down the simulation by roughly factor of 1000.
 ```console
 $ cd $REPO_TOP
 $ build/lowrisc_systems_top_earlgrey_verilator_0.1/sim-verilator/Vtop_earlgrey_verilator \
-  --meminit=rom,build-bin/sw/device/sim-verilator/boot_rom/boot_rom.elf \
-  --meminit=flash,build-bin/sw/device/sim-verilator/examples/hello_world/hello_world.elf \
+  --meminit=rom,build-bin/sw/device/boot_rom/boot_rom_sim_verilator.elf \
+  --meminit=flash,build-bin/sw/device/examples/hello_world/hello_world_sim_verilator.elf \
   --trace
 $ gtkwave sim.fst
 ```

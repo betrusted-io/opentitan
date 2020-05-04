@@ -13,6 +13,7 @@ set_flow_var config_file "${lr_synth_top_module}_lr_synth_conf.tcl" "Synth confi
 set_flow_var rpt_out "./${lr_synth_out_dir}/reports" "Report output directory"
 set_flow_bool_var flatten 1 "flatten"
 set_flow_bool_var timing_run 0 "timing run"
+set_flow_bool_var ibex_branch_target_alu 0 "Enable branch target ALU in Ibex"
 
 source $lr_synth_config_file
 
@@ -20,6 +21,7 @@ if { $lr_synth_timing_run } {
   set_flow_var cell_library_name "nangate" "Name of cell library"
   #set_flow_var sdc_file "${top_module}.sdc" "SDC file"
   set_flow_var sdc_file_in "${lr_synth_top_module}.${lr_synth_cell_library_name}.sdc" "Input SDC file"
+  set_flow_var abc_sdc_file_in "${lr_synth_top_module}_abc.${lr_synth_cell_library_name}.sdc" "Input SDC file for ABC"
   set flop_in_pin_default "*/D"
   set flop_out_pin_default "*/Q"
 
@@ -43,6 +45,11 @@ if { $lr_synth_timing_run } {
   set_flow_var sta_paths_per_group 100 "STA paths reported per group"
   set_flow_var sta_overall_paths 1000 "STA paths reported in overall report"
   puts "clock period: $lr_synth_clk_period ps"
+
+  if { $lr_synth_abc_clk_uprate > $lr_synth_clk_period } {
+    puts "WARNING: abc_clk_uprate must be less than clk_period otherwise ABC will be given a negative clk period"
+  }
+
 }
 
 puts "================================================="

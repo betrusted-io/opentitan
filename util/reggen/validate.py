@@ -6,9 +6,8 @@ Register JSON validation
 """
 
 import logging as log
-import sys
 
-from reggen.field_enums import *
+from reggen.field_enums import SwWrAccess, SwRdAccess, SwAccess, HwAccess
 
 
 # Routine that can be used for Hjson object_pairs_hook
@@ -30,7 +29,7 @@ def checking_dict(pairs):
 def check_count(top, mreg, err_prefix):
     '''Checking mreg count if it is in param list
     '''
-    if not "param_list" in top:
+    if "param_list" not in top:
         top["param_list"] = []
         name_list = []
     else:
@@ -65,7 +64,7 @@ def check_count(top, mreg, err_prefix):
 # validating version of int(x, 0)
 # returns int value, error flag
 # if error flag is True value will be zero
-def check_int(x, err_prefix):
+def check_int(x, err_prefix, suppress_err_msg=False):
     if isinstance(x, int):
         return x, False
     if x[0] == '0' and len(x) > 2:
@@ -76,17 +75,20 @@ def check_int(x, err_prefix):
         elif x[1] in 'xX':
             validch = '0123456789abcdefABCDEF'
         else:
-            log.error(err_prefix +
-                      ": int must start digit, 0b, 0B, 0o, 0O, 0x or 0X")
+            if not suppress_err_msg:
+                log.error(err_prefix +
+                          ": int must start digit, 0b, 0B, 0o, 0O, 0x or 0X")
             return 0, True
         for c in x[2:]:
-            if not c in validch:
-                log.error(err_prefix + ": Bad character " + c + " in " + x)
+            if c not in validch:
+                if not suppress_err_msg:
+                    log.error(err_prefix + ": Bad character " + c + " in " + x)
                 return 0, True
     else:
         if not x.isdecimal():
-            log.error(err_prefix + ": Number not valid int " + x)
-            return 0, 1
+            if not suppress_err_msg:
+                log.error(err_prefix + ": Number not valid int " + x)
+            return 0, True
     return int(x, 0), False
 
 
@@ -137,7 +139,7 @@ def check_lp(obj, x, err_prefix):
         error += check_keys(y, lp_required, lp_optional, {},
                             err_prefix + ' element ' + x)
         # TODO: Check if PascalCase or ALL_CAPS
-        if not "type" in y:
+        if "type" not in y:
             y["type"] = "int"
 
         if "local" in y:
@@ -182,7 +184,7 @@ def search_param(obj, key):
 def check_keys(obj, required_keys, optional_keys, added_keys, err_prefix):
     error = 0
     for x in required_keys:
-        if not x in obj:
+        if x not in obj:
             error += 1
             log.error(err_prefix + " missing required key " + x)
     for x in obj:
@@ -191,7 +193,7 @@ def check_keys(obj, required_keys, optional_keys, added_keys, err_prefix):
             type = required_keys[x][0]
         elif x in optional_keys:
             type = optional_keys[x][0]
-        elif not x in added_keys:
+        elif x not in added_keys:
             log.warning(err_prefix + " contains extra key " + x)
         if type[:2] == 'ln':
             error += check_ln(obj, x, type == 'lnw', err_prefix)
@@ -242,8 +244,7 @@ def bitmask(bfield):
         msb = brange[0]
         lsb = brange[2]
         res = 0
-        if ((not msb.isdecimal()) or (not lsb.isdecimal()) or
-            (int(lsb) > int(msb))):
+        if not (msb.isdecimal() and lsb.isdecimal()) or int(lsb) > int(msb):
             log.error("Bad bit range " + bfield + str(brange))
             return (0, 0, 0)
         else:
@@ -261,21 +262,27 @@ val_types = {
     'd': ["int", "integer (binary 0b, octal 0o, decimal, hex 0x)"],
     'x': ["xint", "x for undefined otherwise int"],
     'b': [
-        "bitrange", "bit number as decimal integer, \
-                    or bit-range as decimal integers msb:lsb"
+        "bitrange", "bit number as decimal integer, "
+        "or bit-range as decimal integers msb:lsb"
     ],
     'l': ["list", "comma separated list enclosed in `[]`"],
-    'ln': ["name list", 'comma separated list enclosed in `[]` of '\
-           'one or more groups that have just name and dscr keys.'\
-           ' e.g. `{ name: "name", desc: "description"}`'],
+    'ln': [
+        "name list", 'comma separated list enclosed in `[]` of '
+        'one or more groups that have just name and dscr keys.'
+        ' e.g. `{ name: "name", desc: "description"}`'
+    ],
     'lnw': ["name list+", 'name list that optionally contains a width'],
     'lp': ["parameter list", 'parameter list having default value optionally'],
     'g': ["group", "comma separated group of key:value enclosed in `{}`"],
-    'lg': ["list of group", "comma separated group of key:value enclosed in `{}`"\
-           " the second entry of the list is the sub group format"],
+    'lg': [
+        "list of group", "comma separated group of key:value enclosed in `{}`"
+        " the second entry of the list is the sub group format"
+    ],
     's': ["string", "string, typically short"],
-    't': ["text", "string, may be multi-line enclosed in `'''` "\
-          "may use `**bold**`, `*italic*` or `!!Reg` markup"],
+    't': [
+        "text", "string, may be multi-line enclosed in `'''` "
+        "may use `**bold**`, `*italic*` or `!!Reg` markup"
+    ],
     'T': ["tuple", "tuple enclosed in ()"],
     'pi': ["python int", "Native Python type int (generated)"],
     'pb': ["python Bool", "Native Python type Bool (generated)"],
@@ -288,10 +295,9 @@ top_required = {
     'name': ['s', "name of the component"],
     'clock_primary': ['s', "name of the primary clock"],
     'bus_device': ['s', "name of the bus interface for the device"],
-    'registers': [
-        'l', "list of register definition groups and \
-                              offset control groups"
-    ]
+    'registers':
+    ['l', "list of register definition groups and "
+     "offset control groups"]
 }
 top_optional = {
     'bus_host': ['s', "name of the bus interface as host"],
@@ -300,25 +306,33 @@ top_optional = {
     'available_output_list': ['lnw', "list of available peripheral outputs"],
     'available_inout_list': ['lnw', "list of available peripheral inouts"],
     'interrupt_list': ['lnw', "list of peripheral interrupts"],
-    'no_auto_intr_regs': ['s', "Set to true to suppress automatic "\
-                          "generation of interrupt registers. " \
-                          "Defaults to false if not present."],
+    'inter_signal_list': ['l', "list of inter-module signals"],
+    'no_auto_intr_regs': [
+        's', "Set to true to suppress automatic "
+        "generation of interrupt registers. "
+        "Defaults to false if not present."
+    ],
     'alert_list': ['lnw', "list of peripheral alerts"],
     'regwidth': ['d', "width of registers in bits (default 32)"],
     'param_list': ['lp', "list of parameters of the IP"],
     'scan': ['pb', 'Indicates the module have `scanmode_i`'],
-    'SPDX-License-Identifier': ['s', "License ientifier (if using pure json) "\
-                                "Only use this if unable to put this "\
-                                "information in a comment at the top of the "\
-                                "file."]
+    'SPDX-License-Identifier': [
+        's', "License ientifier (if using pure json) "
+        "Only use this if unable to put this "
+        "information in a comment at the top of the "
+        "file."
+    ]
 }
-top_added = {'genrnames': ['pl', "list of register names"],
-             'genautoregs': ['pb', "Registers were generated from config info"],
-             'genwennames': ['pl', "list of registers used as write enables"],
-             'gennextoffset': ['pi', "offset next register would use"],
-             'gensize': ['pi', "address space size needed for registers. "\
-                              "Generated by tool as next power of 2."]
-             }
+top_added = {
+    'genrnames': ['pl', "list of register names"],
+    'genautoregs': ['pb', "Registers were generated from config info"],
+    'genwennames': ['pl', "list of registers used as write enables"],
+    'gennextoffset': ['pi', "offset next register would use"],
+    'gensize': [
+        'pi', "address space size needed for registers. "
+        "Generated by tool as next power of 2."
+    ]
+}
 
 # ln type has list of groups with only name and description
 # (was called "subunit" in cfg_validate)
@@ -342,15 +356,20 @@ lp_optional = {
 }
 
 # Registers list may have embedded keys
-list_optone = {'reserved': ['d', "number of registers to reserve space for"],
-              'skipto':    ['d', "set next register offset to value"],
-              'sameaddr':  ['l', "list of register definition groups "\
-                            "that share the same offset"],
-              'window':    ['g', "group defining an address range "\
-                            "for something other than standard registers"],
-              'multireg':  ['g', "group defining registers generated "\
-                            "from a base instance."]
-               }
+list_optone = {
+    'reserved': ['d', "number of registers to reserve space for"],
+    'skipto': ['d', "set next register offset to value"],
+    'sameaddr':
+    ['l', "list of register definition groups "
+     "that share the same offset"],
+    'window': [
+        'g', "group defining an address range "
+        "for something other than standard registers"
+    ],
+    'multireg':
+    ['g', "group defining registers generated "
+     "from a base instance."]
+}
 
 # Register keys
 reg_required = {
@@ -385,7 +404,11 @@ reg_optional = {
         "register name should be given here. empty-string for no register " +
         "write protection"
     ],
-    'resval': ['d', "reset value of full register (default 0)"]
+    'resval': ['d', "reset value of full register (default 0)"],
+    'tags': [
+        's',
+        "tags for the register, followed by the format 'tag_name:item1:item2...'"
+    ]
 }
 reg_added = {
     'genresval': ['pi', "reset value generated from resval and fields"],
@@ -406,56 +429,74 @@ window_required = {
 
 # TODO potential for additional optional to give more type info?
 # eg sram-hw-port: "none", "sync", "async"
-window_optional = {'byte-write': ['s', "True if byte writes are supported. "\
-                                  "Defaults to false if not present."],
-                   'validbits': ['d', "Number of valid data bits within "\
-                                 "regwidth sized word. "\
-                                 "Defaults to regwidth. If "\
-                                 "smaller than the regwidth then in each "\
-                                 "word of the window bits "\
-                                 "[regwidth-1:validbits] are unused and "\
-                                 "bits [validbits-1:0] are valid."],
-                   'noalign': ['s', "Set to True to prevent tool aligning "\
-                               "the base address of the window. "\
-                               "Defaults to false if not present."],
-                   'unusual': ['s', "True if window has unusual parameters "\
-                               "(set to prevent Unusual: errors)."\
-                               "Defaults to false if not present."]
-                  }
+window_optional = {
+    'byte-write': [
+        's', "True if byte writes are supported. "
+        "Defaults to false if not present."
+    ],
+    'validbits': [
+        'd', "Number of valid data bits within "
+        "regwidth sized word. "
+        "Defaults to regwidth. If "
+        "smaller than the regwidth then in each "
+        "word of the window bits "
+        "[regwidth-1:validbits] are unused and "
+        "bits [validbits-1:0] are valid."
+    ],
+    'noalign': [
+        's', "Set to True to prevent tool aligning "
+        "the base address of the window. "
+        "Defaults to false if not present."
+    ],
+    'unusual': [
+        's', "True if window has unusual parameters "
+        "(set to prevent Unusual: errors)."
+        "Defaults to false if not present."
+    ]
+}
 
-window_added = {'genbyte-write': ['pb', "generated boolean for byte-write "],
-                'genvalidbits': ['pi', "vailid data width"],
-                'genoffset': ['pi', "base offset address of the window "\
-                              "(aligned for size)"],
-                'genswaccess': ['pe', "Software access (gen enum)"],
-                'genswwraccess': ['pe', "Software write access (gen enum)"],
-                'genswrdaccess': ['pe', "Software read access (gen enum)"]
-               }
+window_added = {
+    'genbyte-write': ['pb', "generated boolean for byte-write"],
+    'genvalidbits': ['pi', "valid data width"],
+    'genoffset':
+    ['pi', "base offset address of the window (aligned for size)"],
+    'genswaccess': ['pe', "Software access (gen enum)"],
+    'genswwraccess': ['pe', "Software write access (gen enum)"],
+    'genswrdaccess': ['pe', "Software read access (gen enum)"]
+}
 
 # Multireg keys
-multireg_required = {'name':   ['s', "base name of the registers"],
-                     'desc':   ['t', "description of the registers"],
-                     'count':  ['s', "number of instances to generate."\
-                                " This field can be integer or string matching"\
-                                " from param_list"],
-                     'cname':  ['s', "base name for each instance, mostly "\
-                                "useful for refering to instance in messages"],
-                     'fields': ['l', "list of register field description"\
-                                "groups. Describes bit positions used for"\
-                                " base instance."]
-                     }
+multireg_required = {
+    'name': ['s', "base name of the registers"],
+    'desc': ['t', "description of the registers"],
+    'count': [
+        's', "number of instances to generate."
+        " This field can be integer or string matching"
+        " from param_list."
+    ],
+    'cname': [
+        's', "base name for each instance, mostly"
+        " useful for refering to instance in messages."
+    ],
+    'fields': [
+        'l', "list of register field description"
+        " groups. Describes bit positions used for"
+        " base instance."
+    ]
+}
 multireg_optional = reg_optional
 multireg_optional.update({
     'regwen_incr': [
-        's', "If true, regwen term increments along with current multireg " +
-        "count "
+        's', "If true, regwen term increments"
+        " along with current multireg count."
     ],
 })
 
-multireg_added = {'genregs': ['l',
-                              "generated list of registers with required "\
-                              "and added keys"]
-                  }
+multireg_added = {
+    'genregs':
+    ['l', "generated list of registers with required"
+     " and added keys"]
+}
 
 # Field keys
 # special case in the code, no name and no desc if only field
@@ -482,7 +523,11 @@ field_optional = {
         "x if neither are provided and the field "
         "is wo. Must match if both are provided."
     ],
-    'enum': ['l', "list of permitted enumeration groups"]
+    'enum': ['l', "list of permitted enumeration groups"],
+    'tags': [
+        's',
+        "tags for the field, followed by the format 'tag_name:item1:item2...'"
+    ]
 }
 field_added = {
     'genrsvdenum': ['pb', "enum did not cover every possible value"],
@@ -511,24 +556,26 @@ enum_added = {}
 
 # swaccess permitted values
 # text description, access enum, wr access enum, rd access enum, ok in window
+# flake8 doens't support noqa for a block.
+# So should choose between visually hard-to-redable and noqa comment every lines.
 swaccess_permitted = {
-    'ro':    ("Read Only",
-                        SwAccess.RO,  SwWrAccess.NONE, SwRdAccess.RD,   True),
-    'rc':    ("Read Only, reading clears",
-                        SwAccess.RC,  SwWrAccess.WR,   SwRdAccess.RC,   False),
-    'rw':    ("Read/Write",
-                        SwAccess.RW,  SwWrAccess.WR,   SwRdAccess.RD,   True),
-    'r0w1c': ("Read zero, Write with 1 clears",
-                        SwAccess.W1C, SwWrAccess.WR,   SwRdAccess.NONE, False),
-    'rw1s':  ("Read, Write with 1 sets",
-                        SwAccess.W1S, SwWrAccess.WR,   SwRdAccess.RD,   False),
-    'rw1c':  ("Read, Write with 1 clears",
-                        SwAccess.W1C, SwWrAccess.WR,   SwRdAccess.RD,   False),
-    'rw0c':  ("Read, Write with 0 clears",
-                        SwAccess.W0C, SwWrAccess.WR,   SwRdAccess.RD,   False),
-    'wo':    ("Write Only",
-                        SwAccess.WO,  SwWrAccess.WR,   SwRdAccess.NONE, True)
-} # yapf: disable
+    'ro':    ("Read Only",                                             # noqa: E241
+              SwAccess.RO,  SwWrAccess.NONE, SwRdAccess.RD,   True),   # noqa: E241
+    'rc':    ("Read Only, reading clears",                             # noqa: E241
+              SwAccess.RC,  SwWrAccess.WR,   SwRdAccess.RC,   False),  # noqa: E241
+    'rw':    ("Read/Write",                                            # noqa: E241
+              SwAccess.RW,  SwWrAccess.WR,   SwRdAccess.RD,   True),   # noqa: E241
+    'r0w1c': ("Read zero, Write with 1 clears",                        # noqa: E241
+              SwAccess.W1C, SwWrAccess.WR,   SwRdAccess.NONE, False),  # noqa: E241
+    'rw1s':  ("Read, Write with 1 sets",                               # noqa: E241
+              SwAccess.W1S, SwWrAccess.WR,   SwRdAccess.RD,   False),  # noqa: E241
+    'rw1c':  ("Read, Write with 1 clears",                             # noqa: E241
+              SwAccess.W1C, SwWrAccess.WR,   SwRdAccess.RD,   False),  # noqa: E241
+    'rw0c':  ("Read, Write with 0 clears",                             # noqa: E241
+              SwAccess.W0C, SwWrAccess.WR,   SwRdAccess.RD,   False),  # noqa: E241
+    'wo':    ("Write Only",                                            # noqa: E241
+              SwAccess.WO,  SwWrAccess.WR,   SwRdAccess.NONE, True)    # noqa: E241
+}  # yapf: disable
 
 # hwaccess permitted values
 hwaccess_permitted = {
@@ -578,8 +625,43 @@ keywords_verilog = [
 ]
 
 
+# if not int, check in param_list
+def resolve_value(entry, param_list):
+    val, not_int = check_int(entry, "", True)
+    err = 0
+
+    if not_int:
+        param, err = search_param(param_list, entry)
+        val = param['default']
+        if param['local'] != "true":
+            log.warning(
+                "It is recommended to define {} as localparam," +
+                " since it should not be changed in the design".format(entry))
+
+    return int(val), err
+
+
+# only supports subtractions right now
+def resolve_bitfield(entry, param_list):
+    lead_term = True
+    val = 0
+    error = 0
+    terms = entry.replace(" ", "").split('-')
+
+    for i in terms:
+        if lead_term:
+            lead_term = False
+            val, err = resolve_value(i, param_list)
+        else:
+            tmp, err = resolve_value(i, param_list)
+            val -= tmp
+        error += err
+    # convert back to string
+    return str(val), error
+
+
 def validate_fields(fields, rname, default_sw, default_hw, full_resval,
-                    reg_hwqe, reg_hwre, width):
+                    reg_hwqe, reg_hwre, width, top):
     error = 0
     bits_used = 0
     gen_resval = 0
@@ -592,12 +674,12 @@ def validate_fields(fields, rname, default_sw, default_hw, full_resval,
 
     for field in fields:
         fcount += 1
-        if not 'name' in field:
+        if 'name' not in field:
             fname = rname + ".field" + str(fcount)
             if (len(fields) == 1):
                 field['name'] = rname
                 # only allow no desc if no name
-                if not 'desc' in field:
+                if 'desc' not in field:
                     field['desc'] = ""
         else:
             fname = field['name']
@@ -620,8 +702,11 @@ def validate_fields(fields, rname, default_sw, default_hw, full_resval,
             error += ck_err
             continue
 
-        if not 'swaccess' in field:
-            if (default_sw == None):
+        if 'tags' not in field:
+            field['tags'] = []
+
+        if 'swaccess' not in field:
+            if default_sw is None:
                 error += 1
                 log.error(fname + ":no swaccess or register default swaccess")
                 swaccess = "wo"
@@ -631,7 +716,7 @@ def validate_fields(fields, rname, default_sw, default_hw, full_resval,
                 swaccess = default_sw
         else:
             swaccess = field['swaccess']
-            if (not swaccess in swaccess_permitted):
+            if swaccess not in swaccess_permitted:
                 error += 1
                 log.error(fname + ": Bad field swaccess value " + swaccess)
                 swaccess = "wo"
@@ -640,8 +725,8 @@ def validate_fields(fields, rname, default_sw, default_hw, full_resval,
         field['genswwraccess'] = swacc_info[2]
         field['genswrdaccess'] = swacc_info[3]
 
-        if not 'hwaccess' in field:
-            if (default_hw == None):
+        if 'hwaccess' not in field:
+            if default_hw is None:
                 error += 1
                 log.error(fname + ": no hwaccess or register default hwaccess")
                 hwaccess = "hro"
@@ -651,7 +736,7 @@ def validate_fields(fields, rname, default_sw, default_hw, full_resval,
                 hwaccess = default_hw
         else:
             hwaccess = field['hwaccess']
-            if (not hwaccess in hwaccess_permitted):
+            if hwaccess not in hwaccess_permitted:
                 error += 1
                 log.error(fname + ": Bad field hwaccess value " + hwaccess)
                 hwaccess = "hro"
@@ -663,6 +748,16 @@ def validate_fields(fields, rname, default_sw, default_hw, full_resval,
         # allow an int but make a string for all downstream users
         if isinstance(field['bits'], int):
             field['bits'] = str(field['bits'])
+
+        # Resolve parameters if they are present
+        if ':' in field['bits']:
+            msb_range, sep, lsb_range = field['bits'].partition(':')
+            msb_range, err = resolve_bitfield(msb_range, top['param_list'])
+            error += err
+            lsb_range, err = resolve_bitfield(lsb_range, top['param_list'])
+            error += err
+            field['bits'] = msb_range + ':' + lsb_range
+
         field_bits = bitmask(field['bits'])
         if (field_bits[0] == 0):
             error += 1
@@ -694,7 +789,7 @@ def validate_fields(fields, rname, default_sw, default_hw, full_resval,
                               hex(max_in_field) + ")")
                     resval &= max_in_field
 
-                if ((full_resval != None) and
+                if (full_resval is not None and
                     (resval !=
                      ((full_resval >> field_bits[2]) & max_in_field))):
                     error += 1
@@ -709,7 +804,7 @@ def validate_fields(fields, rname, default_sw, default_hw, full_resval,
                 field['genresval'] = 0
                 field['genresvalx'] = True
         else:
-            if (full_resval != None):
+            if full_resval is not None:
                 resval = (full_resval >> field_bits[2]) & max_in_field
                 gen_resval |= resval << field_bits[2]
                 gen_resmask |= field_bits[0]
@@ -762,21 +857,20 @@ def validate_fields(fields, rname, default_sw, default_hw, full_resval,
 
 
 def parse_dvrights(field=None):
-    if field == None:
+    if field is None:
         return "RO"
-    elif field in ['ro', 'rc']:
+    if field in ['ro', 'rc']:
         return "RO"
-    elif field in ['rw', 'r0w1c', 'rw1s', 'rw1c', 'rw0c']:
+    if field in ['rw', 'r0w1c', 'rw1s', 'rw1c', 'rw0c']:
         return "RW"
-    else:
-        return "WO"
+    return "WO"
 
 
 def validate_reg_defaults(reg, rname):
     error = 0
     if 'swaccess' in reg:
         default_sw = reg['swaccess']
-        if (not default_sw in swaccess_permitted):
+        if default_sw not in swaccess_permitted:
             error += 1
             log.error(rname + ": Bad register swaccess value " + default_sw)
             default_sw = None
@@ -785,18 +879,26 @@ def validate_reg_defaults(reg, rname):
 
     if 'hwaccess' in reg:
         default_hw = reg['hwaccess']
-        if (not default_hw in hwaccess_permitted):
+        if default_hw not in hwaccess_permitted:
             error += 1
             log.error(rname + ": Bad register hwaccess value " + default_hw)
             default_hw = None
     else:
         default_hw = "hro"  # Read-Only
+        reg['hwaccess'] = default_hw
 
     if 'hwext' in reg:
         hwext, ierr = check_bool(reg['hwext'], rname + " hwext")
         if ierr:
             error += 1
             reg['hwext'] = "false"
+        elif hwext is True and default_hw == "hro" and (default_sw != "wo" and
+                                                        default_sw != "r0w1c"):
+            log.warning(
+                rname +
+                ": hwext register readable by software cannot be hro. " +
+                "Changing it to hrw.")
+            default_hw = "hrw"
     else:
         reg['hwext'] = "false"
 
@@ -806,13 +908,13 @@ def validate_reg_defaults(reg, rname):
         if ierr:
             error += 1
             reg['hwqe'] = "false"
-        elif hwqe == False and reg[
+        elif hwqe is False and reg[
                 'hwext'] == "true" and reg['swaccess'] != "ro":
             log.warning(rname + ": hwqe must be true for hwext register. " +
                         "Changing it to true.")
             reg['hwqe'] = "true"
     elif reg['hwext'] == "true" and reg['swaccess'] != "ro":
-        log.warning(rname + ": hwqe not provided but must be true for "\
+        log.warning(rname + ": hwqe not provided but must be true for "
                     "hwext not read-only register. Setting it to true.")
         reg['hwqe'] = "true"
     else:
@@ -824,7 +926,7 @@ def validate_reg_defaults(reg, rname):
         if ierr:
             error += 1
             reg['hwre'] = "false"
-        elif hwre == True and reg['hwext'] == "false":
+        elif hwre is True and reg['hwext'] == "false":
             log.warning(rname + ": hwre cannot be used with hwext. " +
                         "Changing it to false.")
             reg['hwre'] = "false"
@@ -833,6 +935,9 @@ def validate_reg_defaults(reg, rname):
 
     if 'regwen' not in reg:
         reg['regwen'] = ''
+
+    if 'tags' not in reg:
+        reg['tags'] = []
 
     if 'resval' in reg:
         full_resval, ierr = check_int(reg['resval'], rname + " resval")
@@ -848,7 +953,7 @@ def validate_reg_defaults(reg, rname):
 def validate_register(reg, offset, width, top):
     error = 0
 
-    if not 'name' in reg:
+    if 'name' not in reg:
         rname = "Register at +" + hex(offset)
     else:
         rname = reg['name']
@@ -877,7 +982,7 @@ def validate_register(reg, offset, width, top):
 
     gen = validate_fields(reg['fields'], rname, default_sw, default_hw,
                           full_resval, reg['hwqe'] == "true",
-                          reg['hwre'] == "true", width)
+                          reg['hwre'] == "true", width, top)
     error = error + gen[0]
     # ensure the fields are in order (except if error which could be bad bits)
     if error == 0:
@@ -901,7 +1006,7 @@ def validate_multi(mreg, offset, addrsep, width, top):
     error = 0
     bits_used = 0
 
-    if not 'name' in mreg:
+    if 'name' not in mreg:
         mrname = "MultiRegister at +" + hex(offset)
         mreg["name"] = "MREG_" + hex(offset)
     else:
@@ -929,7 +1034,7 @@ def validate_multi(mreg, offset, addrsep, width, top):
 
     gen = validate_fields(mreg['fields'], mrname, default_sw, default_hw,
                           full_resval, mreg['hwqe'] == "true",
-                          mreg['hwre'] == "true", width)
+                          mreg['hwre'] == "true", width, top)
 
     error += gen[0]
 
@@ -941,6 +1046,7 @@ def validate_multi(mreg, offset, addrsep, width, top):
 
     if error > 0:
         return (error, 0)
+
     bused = gen[3]
     max_rval = (1 << width) - 1
     cname = mreg['cname']
@@ -959,6 +1065,10 @@ def validate_multi(mreg, offset, addrsep, width, top):
             genreg['hwre'] = mreg['hwre']
             genreg['swaccess'] = default_sw
             genreg['hwaccess'] = default_hw
+            if 'tags' in mreg:
+                genreg['tags'] = mreg['tags']
+            else:
+                genreg['tags'] = []
 
             if regwen_incr:
                 genreg['regwen'] = mreg['regwen'] + str(rnum)
@@ -971,13 +1081,21 @@ def validate_multi(mreg, offset, addrsep, width, top):
             genfields = []
 
         while bpos < width:
+            # bused is a bit mask of how many bits the fields need
+            # bpos is the current LSB of the bits allocated for the fields
             trypos = bused << bpos
-            if trypos > max_rval:
+
+            # if register can no longer contain another homogenous field
+            # if the field is not homogenous and has been allocated
+            # Currently we only compact if field is homogenous
+            if (trypos > max_rval) or (bpos != 0 and len(mreg['fields']) > 1):
                 bpos = width
                 break
+            # if bits have not been used, break and allocate
             if (trypos & bits_used) == 0:
                 break
             bpos += 1
+
         if bpos < width:
             # found a spot
             for fn in mreg['fields']:
@@ -989,6 +1107,8 @@ def validate_multi(mreg, offset, addrsep, width, top):
                     newf['bitinfo'] = (newf['bitinfo'][0] << bpos,
                                        newf['bitinfo'][1],
                                        newf['bitinfo'][2] + bpos)
+                    if 'tags' not in fn:
+                        newf['tags'] = []
                     if 'enum' in newf:
                         del newf['enum']
                 else:
@@ -1008,6 +1128,8 @@ def validate_multi(mreg, offset, addrsep, width, top):
         if closereg:
             genreg['fields'] = genfields
             genreg['genbasebits'] = bused
+            genreg['genresval'] = resval
+            genreg['genresmask'] = resmask
             error += validate_register(genreg, offset + (rnum * addrsep),
                                        width, top)
             if error:
@@ -1041,10 +1163,19 @@ def make_intr_reg(regs, name, offset, swaccess, hwaccess, desc):
     genreg['hwext'] = 'true' if name == 'INTR_TEST' else 'false'
     genreg['hwqe'] = 'true' if name == 'INTR_TEST' else 'false'
     genreg['hwre'] = 'false'
+    # Add tags.
+    if name == 'INTR_TEST':
+        # intr_test csr is WO which - it reads back 0s
+        genreg['tags'] = ["excl:CsrNonInitTests:CsrExclWrite"]
+    elif name == 'INTR_STATE':
+        # intr_state csr is affected by writes to other csrs - skip write-check
+        genreg['tags'] = ["excl:CsrNonInitTests:CsrExclWriteCheck"]
+    else:
+        genreg['tags'] = []
     bits_used = 0
     genfields = []
     cur_bit = 0
-    for bit in intrs:
+    for (field_idx, bit) in enumerate(intrs):
         newf = {}
         newf['name'] = bit['name']
         w = 1
@@ -1055,6 +1186,13 @@ def make_intr_reg(regs, name, offset, swaccess, hwaccess, desc):
         else:
             newf['bits'] = str(cur_bit)
             newf['bitinfo'] = (1 << cur_bit, 1, cur_bit)
+
+        # Put the automatically generated information back into
+        # `interrupt_list`, so that it can be used to generate C preprocessor
+        # definitions if needed.
+        intrs[field_idx]['bits'] = newf['bits']
+        intrs[field_idx]['bitinfo'] = newf['bitinfo']
+
         if name == 'INTR_ENABLE':
             newf['desc'] = 'Enable interrupt when ' + \
                            ('corresponding bit in ' if w > 1 else '') + \
@@ -1077,8 +1215,12 @@ def make_intr_reg(regs, name, offset, swaccess, hwaccess, desc):
         newf['genhwre'] = False
         newf['genresval'] = 0
         newf['genresvalx'] = False
+        if 'tags' not in bit:
+            newf['tags'] = []
+        else:
+            newf['tags'] = bit['tags']
 
-        bits_used = bits_used | (1 << cur_bit)
+        bits_used = bits_used | ((2**w - 1) << cur_bit)
         cur_bit += 1
         genfields.append(newf)
 
@@ -1116,7 +1258,7 @@ def make_intr_regs(regs, offset, addrsep, fullwidth):
 def validate_window(win, offset, regwidth, top):
     error = 0
 
-    if not 'name' in win:
+    if 'name' not in win:
         name = "Window at +" + hex(offset)
     else:
         name = win['name']
@@ -1155,10 +1297,17 @@ def validate_window(win, offset, regwidth, top):
     else:
         win['genvalidbits'] = regwidth
 
-    winitems, err = check_int(win['items'], name + " items")
+    param, err = resolve_value(win['items'], top['param_list'])
+    error += err
+
+    winitems, err = check_int(param, name + " items")
+
     if err:
         error += err
         winitems = 4
+
+    win['items'] = str(winitems)
+
     # convert items to bytes
     winsize = winitems * (regwidth // 8)
     # if size is not a power of two, po2_size is next po2 larger
@@ -1184,7 +1333,7 @@ def validate_window(win, offset, regwidth, top):
     win['genoffset'] = genoff
 
     swaccess = win['swaccess']
-    if (not swaccess in swaccess_permitted):
+    if swaccess not in swaccess_permitted:
         log.warn(name + ": Bad window swaccess value " + swaccess)
         swaccess = "wo"
     swacc_info = swaccess_permitted[swaccess]
@@ -1212,25 +1361,28 @@ def check_wen_regs(regs):
     # 0 - name
     # 1 - reset value
     # 2 - sw access
+    # 3 - hw access
     tuple_name = 0
     tuple_rstval = 1
     tuple_swaccess = 2
+    tuple_hwaccess = 3
 
-    reg_list = [(reg['name'].lower(), reg['genresval'], reg['swaccess'])
-                for reg in regs['registers']
+    reg_list = [(reg['name'].lower(), reg['genresval'], reg['swaccess'],
+                 reg['hwaccess']) for reg in regs['registers']
                 if 'name' in reg and 'genresval' in reg]
     mreg_list = [
         reg['multireg'] for reg in regs['registers'] if 'multireg' in reg
     ]
     field_list = [((reg['name'] + "_" + field['name']).lower(),
-                   field['genresval'], field['swaccess']) for mreg in mreg_list
-                  for reg in mreg['genregs'] for field in reg['fields']]
+                   field['genresval'], field['swaccess'], field['hwaccess'])
+                  for mreg in mreg_list for reg in mreg['genregs']
+                  for field in reg['fields']]
 
     # Need to check in register names and field list in case of multireg
     reg_list.extend(field_list)
 
     # check for reset value
-    # both w1c and w0c are acceptable
+    # both w1c and w0c are acceptable, ro is also acceptable when hwaccess is wo (hw managed regwen)
     for x in regs['genwennames']:
         target = x.lower()
         log.info("check_wen_regs::Searching for %s" % target)
@@ -1244,10 +1396,23 @@ def check_wen_regs(regs):
             log.error(x + " used as regwen fails requirement to default " +
                       "to 1")
 
-        if not reg_list[idx][tuple_swaccess] in ["rw0c", "rw1c"]:
+        # either the regwen is software managed (rw0c or rw1c)
+        # or it is completely hw managed (sw=r0 and hw=wo)
+        sw_regwen = 0
+        hw_regwen = 0
+
+        if reg_list[idx][tuple_swaccess] in ["rw0c", "rw1c"]:
+            sw_regwen += 1
+
+        if reg_list[idx][tuple_swaccess] == "ro" and reg_list[idx][
+                tuple_hwaccess] == "hwo":
+            hw_regwen += 1
+
+        if (sw_regwen + hw_regwen) == 0:
             error += 1
-            log.error(x +
-                      " used as regwen fails requirement to be W1C or W0C ")
+            log.error(
+                "{x} used as regwen fails requirement to be "
+                "swaccess=W1C/W0C or swaccess=RO and hwaccess=HWO".format(x=x))
 
     return error
 
@@ -1258,10 +1423,14 @@ def validate(regs, **kwargs):
     else:
         params = []
 
-    if not 'name' in regs:
+    if 'name' not in regs:
         log.error("Component has no name. Aborting.")
         return 1
+
     component = regs['name']
+
+    if 'param_list' not in regs:
+        regs['param_list'] = []
 
     error = check_keys(regs, top_required, top_optional, top_added, component)
     if (error > 0):
@@ -1299,7 +1468,7 @@ def validate(regs, **kwargs):
             error += 1
     else:
         no_autoi = False
-    if 'interrupt_list' in regs and not 'genautoregs' in regs and not no_autoi:
+    if 'interrupt_list' in regs and 'genautoregs' not in regs and not no_autoi:
         iregs, err = make_intr_regs(regs, offset, addrsep, fullwidth)
         error += err
         autoregs.extend(iregs)
@@ -1391,7 +1560,8 @@ def validate(regs, **kwargs):
         offset += addrsep
     regs['gennextoffset'] = offset
     # make the right thing happen if now exactly on power of 2
-    if (offset > 0): offset -= 1
+    if offset > 0:
+        offset -= 1
     regs['gensize'] = 1 << offset.bit_length()
 
     error += check_wen_regs(regs)

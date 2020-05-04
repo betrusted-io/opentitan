@@ -41,9 +41,9 @@ module hmac_core import hmac_pkg::*; (
   output [63:0] sha_message_length
 );
 
-  localparam BlockSize = 512;
-  localparam BlockSizeBits = $clog2(BlockSize);
-  localparam HashWordBits = $clog2($bits(sha_word_t));
+  localparam int unsigned BlockSize = 512;
+  localparam int unsigned BlockSizeBits = $clog2(BlockSize);
+  localparam int unsigned HashWordBits = $clog2($bits(sha_word_t));
 
   logic hash_start; // generated from internal state machine
   logic hash_process; // generated from internal state machine to trigger hash
@@ -227,6 +227,7 @@ module hmac_core import hmac_pkg::*; (
 
       StMsg: begin
         sel_rdata = SelFifo;
+        fifo_wsel = (round_q == Outer);
 
         if ( (((round_q == Inner) && reg_hash_process_flag) || (round_q == Outer))
             && (txcount >= sha_message_length)) begin
@@ -276,6 +277,7 @@ module hmac_core import hmac_pkg::*; (
 
       StOPad: begin
         sel_rdata = SelOPad;
+        fifo_wsel = 1'b1; // Remained HMAC select to indicate HMAC is in second stage
 
         if (txcnt_eq_blksz) begin
           st_d = StMsg;

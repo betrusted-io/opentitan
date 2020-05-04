@@ -8,7 +8,7 @@
 // List of Xbar device memory map
 tl_device_t xbar_devices[$] = '{
     '{"rom", '{
-        '{32'h00008000, 32'h00009fff}
+        '{32'h00008000, 32'h0000bfff}
     }},
     '{"debug_mem", '{
         '{32'h1a110000, 32'h1a110fff}
@@ -21,7 +21,9 @@ tl_device_t xbar_devices[$] = '{
     }},
     '{"peri", '{
         '{32'h40000000, 32'h40020fff},
-        '{32'h40080000, 32'h40080fff}
+        '{32'h40080000, 32'h40080fff},
+        '{32'h400a0000, 32'h400bffff},
+        '{32'h40150000, 32'h40150fff}
     }},
     '{"flash_ctrl", '{
         '{32'h40030000, 32'h40030fff}

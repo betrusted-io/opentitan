@@ -8,16 +8,22 @@
 
 {
   name: main
-  clock_connections:
+  clock_srcs:
   {
     clk_main_i: main
     clk_fixed_i: fixed
   }
+  clock_group: infra
   reset: rst_main_ni
   reset_connections:
   {
     rst_main_ni: sys
     rst_fixed_ni: sys_fixed
+  }
+  clock_connections:
+  {
+    clk_main_i: clk_main_infra
+    clk_fixed_i: clk_fixed_infra
   }
   connections:
   {
@@ -101,7 +107,7 @@
       [
         {
           base_addr: 0x00008000
-          size_byte: 0x2000
+          size_byte: 0x4000
         }
       ]
       xbar: false
@@ -174,6 +180,14 @@
         }
         {
           base_addr: 0x40080000
+          size_byte: 0x1000
+        }
+        {
+          base_addr: 0x400A0000
+          size_byte: 0x20000
+        }
+        {
+          base_addr: 0x40150000
           size_byte: 0x1000
         }
       ]

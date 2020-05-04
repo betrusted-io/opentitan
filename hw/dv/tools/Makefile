@@ -1,9 +1,6 @@
-####################################################################################################
-## Copyright lowRISC contributors.                                                                ##
-## Licensed under the Apache License, Version 2.0, see LICENSE for details.                       ##
-## SPDX-License-Identifier: Apache-2.0                                                            ##
-####################################################################################################
-
+# Copyright lowRISC contributors.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
 # directory paths
 # _ROOT are paths indicating a 'starting point'
 # _PATH paths are intermediate paths leading to a _DIR
@@ -32,6 +29,7 @@ RUN_DIR           := ${RUN_PATH}/${RUN_LOC}
 COV_REPORT_DIR    ?= ${SCRATCH_PATH}/cov_report
 SW_BUILD_DIR      ?= ${RUN_DIR}/sw_build
 SW_ROOT_DIR       := ${PRJ_DIR}/sw
+SW_BUILD_DEVICE   ?= fpga_nexysvideo
 
 JOB_OPTS          ?=
 BUILD_JOB_OPTS    ?= $(JOB_OPTS)
@@ -47,11 +45,11 @@ RUN_LOG           ?= ${RUN_DIR}/run.log
 UVM_VERBOSITY     ?= UVM_LOW
 
 TOPS              ?= ${TB_TOP} ${DUT_TOP}_bind
-####################################################################################################
-## Options for SV build / C build / simulation run                                                ##
-## CL_ prefix represents command line versions of these options - they should be empty and only   ##
-## be set on the command line                                                                     ##
-####################################################################################################
+
+# Options for SV build / C build / simulation run
+# CL_ prefix represents command line versions of these options - they should be empty and only
+# be set on the command line
+
 # BUILD_OPTS are passed to the simulator during the SV testbench compile step
 CL_BUILD_OPTS     +=
 BUILD_OPTS        += $(addprefix -top , $(TOPS))
@@ -79,9 +77,6 @@ SIMULATOR ?= vcs
 
 # common tests/seqs
 include ${MAKE_ROOT}/common_tests.mk
-
-# tool to generate ral
-include ${MAKE_ROOT}/ral_gen.mk
 
 # tool to generate file list
 include ${MAKE_ROOT}/fusesoc.mk

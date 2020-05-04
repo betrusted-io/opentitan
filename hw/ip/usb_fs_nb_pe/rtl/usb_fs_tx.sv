@@ -30,7 +30,7 @@ module usb_fs_tx (
   input  logic [3:0] pid_i,
 
   // tx logic pulls data until there is nothing available
-  input  logic tx_data_avail_i,  
+  input  logic tx_data_avail_i,
   output logic tx_data_get_o,
   input  logic [7:0] tx_data_i
 );
@@ -39,7 +39,7 @@ module usb_fs_tx (
   typedef enum logic [2:0] {Idle, Sync, Pid, DataOrCrc160, Crc161, Eop, OscTest} state_e;
   typedef enum logic [1:0] {OsIdle, OsWaitByte, OsTransmit} out_state_e;
 
-    
+
   /////////////////////////
   // Signal Declarations //
   /////////////////////////
@@ -89,7 +89,7 @@ module usb_fs_tx (
         pid_q <= 0;
       end else begin
         pid_q <= pid_d;
-      end      
+      end
     end
   end
 
@@ -133,7 +133,7 @@ module usb_fs_tx (
   /////////
   // FSM //
   /////////
-  always_comb begin : proc_fsm 
+  always_comb begin : proc_fsm
     // Default assignments
     state_d          = state_q;
     data_shift_reg_d = data_shift_reg_q;
@@ -144,7 +144,6 @@ module usb_fs_tx (
     bit_history_d    = bit_history_q;
     bit_count_d      = bit_count_q;
     test_mode_start  = 0;
-
 
     unique case (state_q)
       Idle : begin
@@ -192,19 +191,21 @@ module usb_fs_tx (
             state_d = Crc161;
             data_payload_d = 0;
             tx_data_get_d = 0;
-            data_shift_reg_d = ~{crc16_q[8], crc16_q[9], crc16_q[10], crc16_q[11], crc16_q[12], crc16_q[13], crc16_q[14], crc16_q[15]};
+            data_shift_reg_d = ~{crc16_q[8],  crc16_q[9],  crc16_q[10], crc16_q[11],
+                                 crc16_q[12], crc16_q[13], crc16_q[14], crc16_q[15]};
             oe_shift_reg_d = 8'b11111111;
             se0_shift_reg_d = 8'b00000000;
           end
         end else begin
-          tx_data_get_d = 0; 
+          tx_data_get_d = 0;
         end
       end
 
       Crc161 : begin
         if (byte_strobe_q) begin
           state_d = Eop;
-          data_shift_reg_d = ~{crc16_q[0], crc16_q[1], crc16_q[2], crc16_q[3], crc16_q[4], crc16_q[5], crc16_q[6], crc16_q[7]};
+          data_shift_reg_d = ~{crc16_q[0], crc16_q[1], crc16_q[2], crc16_q[3],
+                               crc16_q[4], crc16_q[5], crc16_q[6], crc16_q[7]};
           oe_shift_reg_d = 8'b11111111;
           se0_shift_reg_d = 8'b00000000;
         end
@@ -222,13 +223,15 @@ module usb_fs_tx (
         // Oscillator test mode: toggle constantly
         if (!tx_osc_test_mode_i && byte_strobe_q) begin
           oe_shift_reg_d   = 8'b00000000;
-          state_d = Idle;          
+          state_d = Idle;
         end else if (byte_strobe_q) begin
           data_shift_reg_d = 8'b00000000;
           oe_shift_reg_d   = 8'b11111111;
           se0_shift_reg_d  = 8'b00000000;
         end
       end
+
+      default: state_d = Idle;
     endcase
 
     // Logic closely coupled to the FSM
@@ -265,7 +268,7 @@ module usb_fs_tx (
     end else begin
       byte_strobe_d = 0;
     end
-  
+
   end
 
   assign tx_data_get_o = tx_data_get_q;
@@ -282,7 +285,7 @@ module usb_fs_tx (
 
     if (bit_strobe_i && data_payload_q && !bitstuff_q4 && !pkt_start_i) begin
       crc16_d = {crc16_q[14:0], 1'b0} ^ ({16{crc16_invert}} & 16'b1000000000000101);
-    end      
+    end
   end
 
   ///////////////////////
@@ -331,7 +334,7 @@ module usb_fs_tx (
   ///////////////////////////////////
   // nrzi and differential driving //
   ///////////////////////////////////
-  
+
   // Output FSM
   always_comb begin : proc_out_fsm
     out_state_d          = out_state_q;
@@ -356,9 +359,9 @@ module usb_fs_tx (
           out_state_d = OsIdle;
         end
       end
-      
+
       default : out_state_d = OsIdle;
-    endcase  
+    endcase
   end
 
   always_comb begin : proc_diff
@@ -385,7 +388,7 @@ module usb_fs_tx (
         end else begin
           // first two bits of Eop: SE0
           usb_se0_d = 1;
-        end       
+        end
 
       end else if (serial_tx_data) begin
         // value should stay the same, do nothing
@@ -400,7 +403,7 @@ module usb_fs_tx (
         usb_d_d = 1;
       end
     end
-  
+
   end
 
   always_ff @(posedge clk_i or negedge rst_ni) begin : proc_diff_reg

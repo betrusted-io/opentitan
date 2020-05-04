@@ -60,13 +60,17 @@ if (foo) {
 
 ***Comments should be `// C99-style` for consistency with C++.***
 
-***Variables mentioned in comments should be delimited with pipe (`|`) characters.***
+<!-- To render a backtick in inline code in markdown, you need to double the surrounding backticks.
+https://daringfireball.net/projects/markdown/syntax#code -->
+***Variables mentioned in comments should be delimited with backtick (`` ` ``) characters.***
 
 Example:
 
 ```c
-// |ptr| can never be NULL for reasons.
+// `ptr` can never be NULL for reasons.
 ```
+
+Note also [Public function (API) documentation](#public-function-api-documentation) below.
 
 ### TODO Comments
 ***TODO comments should be in the format `TODO: message`.***
@@ -114,14 +118,19 @@ The above rules also do not apply to system includes, which should be included b
 The first line of the comment is the summary, followed by a new line, and an optional longer description.
 Input arguments and return arguments can be documented with `@param` and `@return` if they are not self-explanatory from the name.
 
+The documentation tool will also render markdown within descriptions, so backticks should be used to get monospaced text.
+It can also generate references to other named declarations using `#other_function` (for C-style declarations), or `ns::foo` (for C++ declarations).
+
 Example:
 
 ```c
 /**
  * Do something amazing
  *
- * Create a rainbow and place a unicorn at the bottom of it. @p arg1 pots of
- * gold will be positioned on the east end of the rainbow.
+ * Create a rainbow and place a unicorn at the bottom of it. `pots_of_gold`
+ * pots of gold will be positioned on the east end of the rainbow.
+ *
+ * Can be recycled with #recycle_rainbow.
  *
  * @param pots_of_gold Number of gold pots to place next to the rainbow
  * @param unicorns Number of unicorns to position on the rainbow
@@ -130,9 +139,9 @@ Example:
 int create_rainbow(int pots_of_gold, int unicorns);
 ```
 
-## C++ Style Guide
+## C++ Style Guide {#cxx-style-guide}
 
-### C++ Version
+### C++ Version {#cxx-version}
 
 C++ code should target C++14.
 
@@ -162,6 +171,34 @@ Any nonstandard features that are used must be compatible with both GCC and Clan
 
 This rule deviates from the Google C++ style guide to align closer with a typical way of writing C code.
 
+***All symbols in a particular header must share the same unique prefix.***
+
+"Prefix" in this case refers to the identifying string of words, and not the specific type/struct/enum/constant/macro-based capitalisation.
+This rule also deviates from the Google C++ style guide, because C does not have namespaces, so we have to use long names to avoid name clashes.
+Symbols that have specific, global meaning imparted by an external script or specification may break this rule.
+For example:
+```c
+// in my_unit.h
+extern const int kMyUnitMaskValue = 0xFF;
+
+typedef enum { kMyUnitReturnOk } my_unit_return_t;
+
+my_unit_return_t my_unit_init(void);
+```
+
+***The names of enumeration constants must be prefixed with the name of their respective enumeration type.***
+
+Again, this is because C does not have namespaces.
+The exact capitalisation does not need to match, as enumeration type names have a different capitalisation rule to enumeration constants.
+For example:
+```c
+typedef enum my_wonderful_option {
+  kMyWonderfulOptionEnabled,
+  kMyWonderfulOptionDisabled,
+  kMyWonderfulOptionOnlySometimes
+} my_wonderful_option_t;
+```
+
 ### Preprocessor Macros
 
 Macros are often necessary and reasonable coding practice C (as opposed to C++) projects.
@@ -185,6 +222,43 @@ This may change if we find cases where this initialization improves readability.
 
 When initializing an array, initializers *may* be designated when that makes the array more readable (e.g., lookup tables that are mostly zeroed). Mixing designated and undesignated initializers, or using nested initializers, is still
 forbidden.
+
+### Inline Functions
+
+Functions that we strongly wish to be inlined, and which are part of a public interface, should be declared as an inline function.
+This annotation serves as an indication to the programmer that the function has a low calling overhead, despite being part of a public interface.
+Presence---or lack---of an `inline` annotation does not imply a function will---or will not---be inlined by the compiler.
+
+[C11](#c-version) standardised inline functions, learning from the mistakes in C++ and various nonstandard extensions.
+This means there are many legacy ways to define an inline function in C.
+We have chosen to follow how C11 designed the `inline` keyword.
+
+The function definition is written in a header file, with the keyword `inline`:
+```c
+// in my_inline.h
+inline int my_inline_function(long param1) {
+  // implementation
+}
+```
+
+There should be exactly one compilation unit with a compatible `extern` declaration of the same function:
+```c
+// in my_inline.c
+#include <my_inline.h>
+extern int my_inline_function(long param1);
+```
+
+Any compilation unit that includes `my_inline.h` must be linked to the compilation unit with the extern declarations.
+This ensures that if the compiler chooses not to inline `my_inline_function`, there is a function definition that can be called.
+This also ensures that the function can be used via a function pointer.
+
+### Static Declarations
+
+Declarations marked `static` must not appear in header files.
+Header files are declarations of public interfaces, and `static` definitions are copied, not shared, between compilation units.
+
+Functions marked `static` must not be marked `inline`.
+The compiler is capable of inlining static functions without the `inline` annotation.
 
 ### Nonstandard Attributes
 
@@ -219,22 +293,8 @@ For builtins that correspond to a C library function, the unprefixed function mu
 Unfortunately, older versions of GCC do not support the `__has_builtin()` preprocessor function, so compiler detection of support for these builtins is next to impossible.
 In this case, a standards-compliant implementation of the unprefixed name must be provided, and the compilation unit should be compiled with `-fno-builtins`.
 
-For builtins that correspond to low-level byte and integer manipulations, an unprefixed inline function must be provided, which contains only a call to the prefixed name.
-Only the unprefixed name may be called by users.
-
-The inline function must be defined in a header, and exactly one compilation unit must have a compatible `extern` declaration for that function.
-For instance, `uint32_t __builtin_bswap32(uint32_t)` should not be called, instead the following should be implemented:
-```c
-// in bswap.h (can be included anywhere)
-inline uint32_t bswap32(uint32_t x) {
-  return __builtin_bswap32(x);
-}
-
-// only in bswap.c
-#include "bswap.h"
-extern uint32_t bswap32(uint32_t x);
-```
-
+For builtins that correspond to low-level byte and integer manipulations, an [inline function](#inline-functions) must be provided with the unprefixed name, which contains only a call to the prefixed builtin.
+Only the unprefixed name may be called by users: for instance, `uint32_t __builtin_bswap32(uint32_t)` should not be called, instead users should use `inline uint32_t bswap32(uint32_t x)`.
 This ensures changes to add compatibilty for other compilers are less invasive, as we already have a function to include a full implementation within.
 
 ## Code Lint

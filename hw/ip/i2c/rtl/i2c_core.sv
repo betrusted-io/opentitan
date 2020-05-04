@@ -85,12 +85,17 @@ module  i2c_core (
   logic        rx_fifo_rready;
   logic [7:0]  rx_fifo_rdata;
 
+  logic        fmt_watermark_d;
+  logic        fmt_watermark_q;
+  logic        rx_watermark_d;
+  logic        rx_watermark_q;
+
   logic        host_idle;
   logic        target_idle;
 
   logic        host_enable;
 
-  // Unused parts of exposed bits 
+  // Unused parts of exposed bits
   logic        unused_fifo_ctrl_rxilvl_qe;
   logic        unused_fifo_ctrl_fmtilvl_qe;
   logic [7:0]  unused_rx_fifo_rdata_q;
@@ -146,25 +151,39 @@ module  i2c_core (
   assign i2c_fifo_rxilvl  = reg2hw.fifo_ctrl.rxilvl.q;
   assign i2c_fifo_fmtilvl = reg2hw.fifo_ctrl.fmtilvl.q;
 
+  always_ff @ (posedge clk_i or negedge rst_ni) begin : watermark_transition
+    if (!rst_ni) begin
+      fmt_watermark_q <= 1'b1; // true by default
+      rx_watermark_q  <= 1'b0; // false by default
+    end else begin
+      fmt_watermark_q <= fmt_watermark_d;
+      rx_watermark_q  <= rx_watermark_d;
+    end
+  end
+ 
   always_comb begin
     unique case(i2c_fifo_fmtilvl)
-      2'h0:    event_fmt_watermark = (fmt_fifo_depth <= 6'd1);
-      2'h1:    event_fmt_watermark = (fmt_fifo_depth <= 6'd4);
-      2'h2:    event_fmt_watermark = (fmt_fifo_depth <= 6'd8);
-      default: event_fmt_watermark = (fmt_fifo_depth <= 6'd16);
+      2'h0:    fmt_watermark_d = (fmt_fifo_depth <= 6'd1);
+      2'h1:    fmt_watermark_d = (fmt_fifo_depth <= 6'd4);
+      2'h2:    fmt_watermark_d = (fmt_fifo_depth <= 6'd8);
+      default: fmt_watermark_d = (fmt_fifo_depth <= 6'd16);
     endcase
   end
 
+  assign event_fmt_watermark = fmt_watermark_d & ~fmt_watermark_q;
+
   always_comb begin
     unique case(i2c_fifo_rxilvl)
-      3'h0:    event_rx_watermark = (rx_fifo_depth >= 6'd1);
-      3'h1:    event_rx_watermark = (rx_fifo_depth >= 6'd4);
-      3'h2:    event_rx_watermark = (rx_fifo_depth >= 6'd8);
-      3'h3:    event_rx_watermark = (rx_fifo_depth >= 6'd16);
-      3'h4:    event_rx_watermark = (rx_fifo_depth >= 6'd30);
-      default: event_rx_watermark = 1'b0;
+      3'h0:    rx_watermark_d = (rx_fifo_depth >= 6'd1);
+      3'h1:    rx_watermark_d = (rx_fifo_depth >= 6'd4);
+      3'h2:    rx_watermark_d = (rx_fifo_depth >= 6'd8);
+      3'h3:    rx_watermark_d = (rx_fifo_depth >= 6'd16);
+      3'h4:    rx_watermark_d = (rx_fifo_depth >= 6'd30);
+      default: rx_watermark_d = 1'b0;
     endcase
   end
+
+  assign event_rx_watermark = rx_watermark_d & ~rx_watermark_q;
 
   assign event_fmt_overflow = fmt_fifo_wvalid & ~fmt_fifo_wready;
   assign event_rx_overflow = rx_fifo_wvalid & ~rx_fifo_wready;
@@ -188,11 +207,11 @@ module  i2c_core (
   assign fmt_byte               = fmt_fifo_rdata[7:0];
   assign fmt_flag_start_before  = fmt_fifo_rdata[8];
   assign fmt_flag_stop_after    = fmt_fifo_rdata[9];
-  assign fmt_flag_read_continue = fmt_fifo_rdata[10];
-  assign fmt_flag_read_bytes    = fmt_fifo_rdata[11];
+  assign fmt_flag_read_bytes    = fmt_fifo_rdata[10];
+  assign fmt_flag_read_continue = fmt_fifo_rdata[11];
   assign fmt_flag_nak_ok        = fmt_fifo_rdata[12];
 
-  // Unused parts of exposed bits 
+  // Unused parts of exposed bits
   assign unused_fifo_ctrl_rxilvl_qe  = reg2hw.fifo_ctrl.rxilvl.qe;
   assign unused_fifo_ctrl_fmtilvl_qe = reg2hw.fifo_ctrl.fmtilvl.qe;
   assign unused_rx_fifo_rdata_q = reg2hw.rdata.q;

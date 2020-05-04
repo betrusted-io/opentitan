@@ -6,15 +6,24 @@ module top_earlgrey_asic (
   // Clock and Reset
   input               IO_CLK,
   input               IO_RST_N,
+  input               IO_CLK_USB_48MHZ,
   // JTAG interface
-  input               IO_JTCK,
-  input               IO_JTMS,
-  input               IO_JTDI,
-  input               IO_JTRST_N,
-  output              IO_JTDO,
+  input               IO_DPS0, // IO_JTCK,    IO_SDCK
+  input               IO_DPS3, // IO_JTMS,    IO_SDCSB
+  input               IO_DPS1, // IO_JTDI,    IO_SDMOSI
+  input               IO_DPS4, // IO_JTRST_N,
+  input               IO_DPS5, // IO_JSRST_N,
+  output              IO_DPS2, // IO_JTDO,    IO_MISO
+  input               IO_DPS6, // JTAG=0,     SPI=1
+  input               IO_DPS7, // BOOTSTRAP=1
   // UART interface
   input               IO_URX,
   output              IO_UTX,
+  // USB interface
+  inout               IO_USB_DP0,
+  inout               IO_USB_DN0,
+  input               IO_USB_SENSE0,
+  output              IO_USB_PULLUP0,
   // GPIO x 16 interface
   inout               IO_GP0,
   inout               IO_GP1,
@@ -34,34 +43,68 @@ module top_earlgrey_asic (
   inout               IO_GP15
 );
 
-  logic [31:0]  cio_gpio_p2d, cio_gpio_d2p, cio_gpio_en_d2p;
+  logic [31:0] cio_gpio_p2d, cio_gpio_d2p, cio_gpio_en_d2p;
   logic cio_uart_rx_p2d, cio_uart_tx_d2p, cio_uart_tx_en_d2p;
+  logic cio_spi_device_sck_p2d, cio_spi_device_csb_p2d, cio_spi_device_mosi_p2d,
+        cio_spi_device_miso_d2p, cio_spi_device_miso_en_d2p;
+  logic cio_jtag_tck_p2d, cio_jtag_tms_p2d, cio_jtag_tdi_p2d, cio_jtag_tdo_d2p;
+  logic cio_jtag_trst_n_p2d, cio_jtag_srst_n_p2d;
+  logic cio_usbdev_sense_p2d;
+  logic cio_usbdev_se0_d2p, cio_usbdev_se0_en_d2p;
+  logic cio_usbdev_pullup_d2p, cio_usbdev_pullup_en_d2p;
+  logic cio_usbdev_tx_mode_se_d2p, cio_usbdev_tx_mode_se_en_d2p;
+  logic cio_usbdev_supsend_d2p, cio_usbdev_supsend_en_d2p;
+  logic cio_usbdev_d_p2d, cio_usbdev_d_d2p, cio_usbdev_d_en_d2p;
+  logic cio_usbdev_dp_p2d, cio_usbdev_dp_d2p, cio_usbdev_dp_en_d2p;
+  logic cio_usbdev_dn_p2d, cio_usbdev_dn_d2p, cio_usbdev_dn_en_d2p;
 
   // Top-level design
   top_earlgrey top_earlgrey (
-    .clk_i            (IO_CLK),
-    .rst_ni           (IO_RST_N),
+    .clk_i                      (IO_CLK),
+    .rst_ni                     (IO_RST_N),
+    .clk_fixed_i                (IO_CLK),
+    .clk_usb_48mhz_i            (IO_CLK_USB_48MHZ),
 
-    .jtag_tck_i       (IO_JTCK),
-    .jtag_tms_i       (IO_JTMS),
-    .jtag_trst_ni     (IO_JTRST_N),
-    .jtag_td_i        (IO_JTDI),
-    .jtag_td_o        (IO_JTDO),
+    .jtag_tck_i                 (cio_jtag_tck_p2d),
+    .jtag_tms_i                 (cio_jtag_tms_p2d),
+    .jtag_trst_ni               (cio_jtag_trst_n_p2d),
+    .jtag_td_i                  (cio_jtag_tdi_p2d),
+    .jtag_td_o                  (cio_jtag_tdo_d2p),
 
-    .dio_spi_device_sck_i     (1'b1),
-    .dio_spi_device_csb_i     (1'b1),
-    .dio_spi_device_mosi_i    (1'b1),
-    .dio_spi_device_miso_o    (),
-    .dio_spi_device_miso_en_o (),
-    .dio_uart_rx_i    (cio_uart_rx_p2d),
-    .dio_uart_tx_o    (cio_uart_tx_d2p),
-    .dio_uart_tx_en_o (cio_uart_tx_en_d2p),
+    .dio_spi_device_sck_i       (cio_spi_device_sck_p2d),
+    .dio_spi_device_csb_i       (cio_spi_device_csb_p2d),
+    .dio_spi_device_mosi_i      (cio_spi_device_mosi_p2d),
+    .dio_spi_device_miso_o      (cio_spi_device_miso_d2p),
+    .dio_spi_device_miso_en_o   (cio_spi_device_miso_en_d2p),
 
-    .mio_in_i         (cio_gpio_p2d),
-    .mio_out_o        (cio_gpio_d2p),
-    .mio_oe_o         (cio_gpio_en_d2p),
+    .dio_uart_rx_i              (cio_uart_rx_p2d),
+    .dio_uart_tx_o              (cio_uart_tx_d2p),
+    .dio_uart_tx_en_o           (cio_uart_tx_en_d2p),
 
-    .scanmode_i       (1'b0)
+    .dio_usbdev_sense_i         (cio_usbdev_sense_p2d),
+    .dio_usbdev_se0_o           (cio_usbdev_se0_d2p),
+    .dio_usbdev_se0_en_o        (cio_usbdev_se0_en_d2p),
+    .dio_usbdev_pullup_o        (cio_usbdev_pullup_d2p),
+    .dio_usbdev_pullup_en_o     (cio_usbdev_pullup_en_d2p),
+    .dio_usbdev_tx_mode_se_o    (cio_usbdev_tx_mode_se_d2p),
+    .dio_usbdev_tx_mode_se_en_o (cio_usbdev_tx_mode_se_en_d2p),
+    .dio_usbdev_suspend_o       (cio_usbdev_suspend_d2p),
+    .dio_usbdev_suspend_en_o    (cio_usbdev_suspend_en_d2p),
+    .dio_usbdev_d_i             (cio_usbdev_d_p2d),
+    .dio_usbdev_d_o             (cio_usbdev_d_d2p),
+    .dio_usbdev_d_en_o          (cio_usbdev_d_en_d2p),
+    .dio_usbdev_dp_i            (cio_usbdev_dp_p2d),
+    .dio_usbdev_dp_o            (cio_usbdev_dp_d2p),
+    .dio_usbdev_dp_en_o         (cio_usbdev_dp_en_d2p),
+    .dio_usbdev_dn_i            (cio_usbdev_dn_p2d),
+    .dio_usbdev_dn_o            (cio_usbdev_dn_d2p),
+    .dio_usbdev_dn_en_o         (cio_usbdev_dn_en_d2p),
+
+    .mio_in_i                   (cio_gpio_p2d),
+    .mio_out_o                  (cio_gpio_d2p),
+    .mio_oe_o                   (cio_gpio_en_d2p),
+
+    .scanmode_i                 (1'b0)
   );
 
   // pad control
@@ -70,13 +113,49 @@ module top_earlgrey_asic (
     .cio_uart_rx_p2d,
     .cio_uart_tx_d2p,
     .cio_uart_tx_en_d2p,
+    // USB
+    .cio_usbdev_sense_p2d(cio_usbdev_sense_p2d),
+    .cio_usbdev_se0_d2p(cio_usbdev_se0_d2p),
+    .cio_usbdev_se0_en_d2p(cio_usbdev_se0_en_d2p),
+    .cio_usbdev_pullup_d2p(cio_usbdev_pullup_d2p),
+    .cio_usbdev_pullup_en_d2p(cio_usbdev_pullup_en_d2p),
+    .cio_usbdev_tx_mode_se_d2p(cio_usbdev_tx_mode_se_d2p),
+    .cio_usbdev_tx_mode_se_en_d2p(cio_usbdev_tx_mode_se_en_d2p),
+    .cio_usbdev_suspend_d2p(cio_usbdev_suspend_d2p),
+    .cio_usbdev_suspend_en_d2p(cio_usbdev_suspend_en_d2p),
+    .cio_usbdev_d_p2d(cio_usbdev_d_p2d),
+    .cio_usbdev_d_d2p(cio_usbdev_d_d2p),
+    .cio_usbdev_d_en_d2p(cio_usbdev_d_en_d2p),
+    .cio_usbdev_dp_p2d(cio_usbdev_dp_p2d),
+    .cio_usbdev_dp_d2p(cio_usbdev_dp_d2p),
+    .cio_usbdev_dp_en_d2p(cio_usbdev_dp_en_d2p),
+    .cio_usbdev_dn_p2d(cio_usbdev_dn_p2d),
+    .cio_usbdev_dn_d2p(cio_usbdev_dn_d2p),
+    .cio_usbdev_dn_en_d2p(cio_usbdev_dn_en_d2p),
     // GPIO
     .cio_gpio_p2d,
     .cio_gpio_d2p,
     .cio_gpio_en_d2p,
+    // SPI device
+    .cio_spi_device_sck_p2d,
+    .cio_spi_device_csb_p2d,
+    .cio_spi_device_mosi_p2d,
+    .cio_spi_device_miso_d2p,
+    .cio_spi_device_miso_en_d2p,
+    // JTAG
+    .cio_jtag_tck_p2d,
+    .cio_jtag_tms_p2d,
+    .cio_jtag_trst_n_p2d,
+    .cio_jtag_srst_n_p2d,
+    .cio_jtag_tdi_p2d,
+    .cio_jtag_tdo_d2p,
     // pads
     .IO_URX,
     .IO_UTX,
+    .IO_USB_DP0,
+    .IO_USB_DN0,
+    .IO_USB_SENSE0,
+    .IO_USB_PULLUP0,
     .IO_GP0,
     .IO_GP1,
     .IO_GP2,
@@ -93,15 +172,14 @@ module top_earlgrey_asic (
     .IO_GP13,
     .IO_GP14,
     .IO_GP15,
-    // SPI related pins
-    .IO_DPS0(1'b1),
-    .IO_DPS1(1'b1),
-    .IO_DPS2(),
-    .IO_DPS3(1'b0),
-    .IO_DPS4(1'b0),
-    .IO_DPS5(1'b0),
-    .IO_DPS6(1'b0),
-    .IO_DPS7(1'b0)
+    .IO_DPS0,
+    .IO_DPS1,
+    .IO_DPS2,
+    .IO_DPS3,
+    .IO_DPS4,
+    .IO_DPS5,
+    .IO_DPS6,
+    .IO_DPS7
   );
 
 endmodule

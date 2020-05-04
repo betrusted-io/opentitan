@@ -24,7 +24,7 @@
 
 module rv_plic import rv_plic_reg_pkg::*; #(
   // derived parameter
-  localparam int SRCW    = $clog2(NumSrc+1)
+  localparam int SRCW    = $clog2(NumSrc)
 ) (
   input     clk_i,
   input     rst_ni,
@@ -42,8 +42,6 @@ module rv_plic import rv_plic_reg_pkg::*; #(
 
   output logic [NumTarget-1:0] msip_o
 );
-
-  import rv_plic_reg_pkg::*;
 
   rv_plic_reg2hw_t reg2hw;
   rv_plic_hw2reg_t hw2reg;
@@ -76,22 +74,22 @@ module rv_plic import rv_plic_reg_pkg::*; #(
   always_comb begin
     claim = '0;
     for (int i = 0 ; i < NumTarget ; i++) begin
-      if (claim_re[i]) claim[claim_id[i] -1] = 1'b1;
+      if (claim_re[i]) claim[claim_id[i]] = 1'b1;
     end
   end
   always_comb begin
     complete = '0;
     for (int i = 0 ; i < NumTarget ; i++) begin
-      if (complete_we[i]) complete[complete_id[i] -1] = 1'b1;
+      if (complete_we[i]) complete[complete_id[i]] = 1'b1;
     end
   end
 
-  //`ASSERT_PULSE(claimPulse, claim_re[i], clk_i, !rst_ni)
-  //`ASSERT_PULSE(completePulse, complete_we[i], clk_i, !rst_ni)
+  //`ASSERT_PULSE(claimPulse, claim_re[i])
+  //`ASSERT_PULSE(completePulse, complete_we[i])
 
-  `ASSERT(onehot0Claim, $onehot0(claim_re), clk_i, !rst_ni)
+  `ASSERT(onehot0Claim, $onehot0(claim_re))
 
-  `ASSERT(onehot0Complete, $onehot0(complete_we), clk_i, !rst_ni)
+  `ASSERT(onehot0Complete, $onehot0(complete_we))
 
   //////////////
   // Priority //
@@ -159,11 +157,29 @@ module rv_plic import rv_plic_reg_pkg::*; #(
   assign prio[60] = reg2hw.prio60.q;
   assign prio[61] = reg2hw.prio61.q;
   assign prio[62] = reg2hw.prio62.q;
+  assign prio[63] = reg2hw.prio63.q;
+  assign prio[64] = reg2hw.prio64.q;
+  assign prio[65] = reg2hw.prio65.q;
+  assign prio[66] = reg2hw.prio66.q;
+  assign prio[67] = reg2hw.prio67.q;
+  assign prio[68] = reg2hw.prio68.q;
+  assign prio[69] = reg2hw.prio69.q;
+  assign prio[70] = reg2hw.prio70.q;
+  assign prio[71] = reg2hw.prio71.q;
+  assign prio[72] = reg2hw.prio72.q;
+  assign prio[73] = reg2hw.prio73.q;
+  assign prio[74] = reg2hw.prio74.q;
+  assign prio[75] = reg2hw.prio75.q;
+  assign prio[76] = reg2hw.prio76.q;
+  assign prio[77] = reg2hw.prio77.q;
+  assign prio[78] = reg2hw.prio78.q;
+  assign prio[79] = reg2hw.prio79.q;
+  assign prio[80] = reg2hw.prio80.q;
 
   //////////////////////
   // Interrupt Enable //
   //////////////////////
-  for (genvar s = 0; s < 63; s++) begin : gen_ie0
+  for (genvar s = 0; s < 81; s++) begin : gen_ie0
     assign ie[0][s] = reg2hw.ie0[s].q;
   end
 
@@ -189,7 +205,7 @@ module rv_plic import rv_plic_reg_pkg::*; #(
   ////////
   // IP //
   ////////
-  for (genvar s = 0; s < 63; s++) begin : gen_ip
+  for (genvar s = 0; s < 81; s++) begin : gen_ip
     assign hw2reg.ip[s].de = 1'b1; // Always write
     assign hw2reg.ip[s].d  = ip[s];
   end
@@ -197,7 +213,7 @@ module rv_plic import rv_plic_reg_pkg::*; #(
   ///////////////////////////////////
   // Detection:: 0: Level, 1: Edge //
   ///////////////////////////////////
-  for (genvar s = 0; s < 63; s++) begin : gen_le
+  for (genvar s = 0; s < 81; s++) begin : gen_le
     assign le[s] = reg2hw.le[s].q;
   end
 
@@ -261,12 +277,15 @@ module rv_plic import rv_plic_reg_pkg::*; #(
   );
 
   // Assertions
-  `ASSERT_KNOWN(TlDValidKnownO_A, tl_o.d_valid, clk_i, !rst_ni)
-  `ASSERT_KNOWN(TlAReadyKnownO_A, tl_o.a_ready, clk_i, !rst_ni)
-  `ASSERT_KNOWN(IrqKnownO_A, irq_o, clk_i, !rst_ni)
-  `ASSERT_KNOWN(MsipKnownO_A, msip_o, clk_i, !rst_ni)
+  `ASSERT_KNOWN(TlDValidKnownO_A, tl_o.d_valid)
+  `ASSERT_KNOWN(TlAReadyKnownO_A, tl_o.a_ready)
+  `ASSERT_KNOWN(IrqKnownO_A, irq_o)
+  `ASSERT_KNOWN(MsipKnownO_A, msip_o)
   for (genvar k = 0; k < NumTarget; k++) begin : gen_irq_id_known
-    `ASSERT_KNOWN(IrqIdKnownO_A, irq_id_o[k], clk_i, !rst_ni)
+    `ASSERT_KNOWN(IrqIdKnownO_A, irq_id_o[k])
   end
+
+  // Assume
+  `ASSUME(Irq0Tied_A, intr_src_i[0] == 1'b0)
 
 endmodule

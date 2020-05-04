@@ -19,7 +19,11 @@
 //
 // See also: prim_esc_receiver, prim_diff_decode, alert_handler
 
-module prim_esc_sender import prim_pkg::*; (
+`include "prim_assert.sv"
+
+module prim_esc_sender
+  import prim_esc_pkg::*;
+(
   input           clk_i,
   input           rst_ni,
   // this triggers a ping test. keep asserted
@@ -68,7 +72,7 @@ module prim_esc_sender import prim_pkg::*; (
 
   // ping enable is 1 cycle pulse
   // escalation pulse is always longer than 2 cycles
-  assign esc_tx_o.esc_p = esc_en_i | esc_en_q | ( ping_en_d & ~ping_en_q);
+  assign esc_tx_o.esc_p = esc_en_i | esc_en_q | (ping_en_d & ~ping_en_q);
   assign esc_tx_o.esc_n = ~esc_tx_o.esc_p;
 
   //////////////
@@ -103,7 +107,7 @@ module prim_esc_sender import prim_pkg::*; (
       // check whether response is 0
       CheckEscRespLo: begin
         state_d      = CheckEscRespHi;
-        if (!esc_en_i || resp) begin
+        if (!esc_tx_o.esc_p || resp) begin
           state_d = Idle;
           integ_fail_o = sigint_detected | resp;
         end
@@ -111,7 +115,7 @@ module prim_esc_sender import prim_pkg::*; (
       // check whether response is 1
       CheckEscRespHi: begin
         state_d = CheckEscRespLo;
-        if (!esc_en_i || !resp) begin
+        if (!esc_tx_o.esc_p || !resp) begin
           state_d = Idle;
           integ_fail_o = sigint_detected | ~resp;
         end
@@ -208,14 +212,14 @@ module prim_esc_sender import prim_pkg::*; (
   ////////////////
 
   // check whether all outputs have a good known state after reset
-  `ASSERT_KNOWN(PingOkKnownO_A, ping_ok_o, clk_i, !rst_ni)
-  `ASSERT_KNOWN(IntegFailKnownO_A, integ_fail_o, clk_i, !rst_ni)
-  `ASSERT_KNOWN(EscPKnownO_A, esc_tx_o, clk_i, !rst_ni)
+  `ASSERT_KNOWN(PingOkKnownO_A, ping_ok_o)
+  `ASSERT_KNOWN(IntegFailKnownO_A, integ_fail_o)
+  `ASSERT_KNOWN(EscPKnownO_A, esc_tx_o)
 
   // diff encoding of output
-  `ASSERT(DiffEncCheck_A, esc_tx_o.esc_p ^ esc_tx_o.esc_n, clk_i, !rst_ni)
+  `ASSERT(DiffEncCheck_A, esc_tx_o.esc_p ^ esc_tx_o.esc_n)
   // signal integrity check propagation
-  `ASSERT(SigIntCheck0_A, esc_rx_i.resp_p == esc_rx_i.resp_n  |-> integ_fail_o, clk_i, !rst_ni)
+  `ASSERT(SigIntCheck0_A, esc_rx_i.resp_p == esc_rx_i.resp_n  |-> integ_fail_o)
   // this happens in case we did not get a correct escalation response
   `ASSERT(SigIntCheck1_A, ##1 $rose(esc_en_i) &&
       state_q inside {Idle, CheckPingResp1, CheckPingResp3} ##1 !esc_rx_i.resp_p |->
@@ -226,9 +230,20 @@ module prim_esc_sender import prim_pkg::*; (
       integ_fail_o, clk_i, !rst_ni || (esc_rx_i.resp_p == esc_rx_i.resp_n) ||
       (state_q == Idle && resp))
   // unexpected response
-  `ASSERT(SigIntCheck3_A, state_q == Idle && resp |-> integ_fail_o, clk_i, !rst_ni)
+  `ASSERT(SigIntCheck3_A, state_q == Idle && resp |-> integ_fail_o)
+  // signal_int_backward_check
+  `ASSERT(SigIntBackCheck_A, integ_fail_o |-> (esc_rx_i.resp_p == esc_rx_i.resp_n) ||
+      (esc_rx_i.resp_p && !(state_q == CheckEscRespHi)) ||
+      (!esc_rx_i.resp_p && !(state_q == CheckEscRespLo)))
+  // state machine CheckEscRespLo and Hi as they are ideal resp signals
+  `ASSERT(StateEscRespHiCheck_A, state_q == CheckEscRespLo && esc_tx_o.esc_p && !integ_fail_o |=>
+      state_q == CheckEscRespHi)
+  `ASSERT(StateEscRespLoCheck_A, state_q == CheckEscRespHi && esc_tx_o.esc_p && !integ_fail_o |=>
+      state_q == CheckEscRespLo)
+  `ASSERT(StateEscRespHiBackCheck_A, state_q == CheckEscRespHi |-> $past(esc_tx_o.esc_p))
+  `ASSERT(StateEscRespLoBackCheck_A, state_q == CheckEscRespLo |-> $past(esc_tx_o.esc_p))
   // check that escalation signal is at least 2 cycles high
-  `ASSERT(EscCheck_A, esc_en_i |-> esc_tx_o.esc_p [*2] , clk_i, !rst_ni)
+  `ASSERT(EscCheck_A, esc_en_i |-> esc_tx_o.esc_p [*2] )
   // escalation / ping collision
   `ASSERT(EscPingCheck_A, esc_en_i && ping_en_i |-> ping_ok_o, clk_i, !rst_ni || integ_fail_o)
   // check that ping request results in only a single cycle pulse

@@ -11,6 +11,9 @@
   // Top level testbench name (sv module).
   tb: tb
 
+  // Simulator used to sign off this block
+  tool: vcs
+
   // Fusesoc core file used for building the file list.
   fusesoc_core: lowrisc:dv:uart_sim:0.1
 
@@ -29,12 +32,24 @@
                 "{proj_root}/hw/dv/data/tests/tl_access_tests.hjson",
                 "{proj_root}/hw/dv/data/tests/stress_tests.hjson"]
 
+  // Add additional tops for simulation.
+  sim_tops: ["-top uart_bind"]
+
   // Default iterations for all tests - each test entry can override this.
   reseed: 50
 
   // Default UVM test and seq class name.
   uvm_test: uart_base_test
   uvm_test_seq: uart_base_vseq
+
+  // Add UART specific exclusion files.
+
+  // Add excl files to tool_srcs so that it gets copied over to the scratch area.
+  tool_srcs: ["{proj_root}/hw/ip/uart/dv/cov/uart_cov_excl.el"]
+
+  // Refer to the excl file with vcs_cov_excl_files var with the rel path from tool_srcs_dir
+  // so the VCS can find it.
+  vcs_cov_excl_files: ["{tool_srcs_dir}/uart_cov_excl.el"]
 
   // List of test specifications.
   tests: [
@@ -60,18 +75,22 @@
 
     {
       name: uart_fifo_reset
+      // need more seeds to cover uart_env_cov::fifo_level_cg
+      reseed: 300
       uvm_test_seq: uart_fifo_reset_vseq
     }
 
     {
       name: uart_rx_oversample
       uvm_test_seq: uart_rx_oversample_vseq
+      run_opts: ["+zero_delays=1"]
     }
 
     {
       name: uart_intr
       uvm_test_seq: uart_intr_vseq
-      run_opts: ["+test_timeout_ns=3_000_000_000"]
+      // 3ms
+      run_opts: ["+test_timeout_ns=3000000000"]
     }
 
     {
@@ -103,6 +122,20 @@
       name: uart_perf
       uvm_test_seq: uart_perf_vseq
       run_opts: ["+zero_delays=1"]
+    }
+
+    {
+      name: uart_stress_all_with_rand_reset
+      // need more seeds to cover uart_agent_cov::uart_reset_cg
+      reseed: 100
+    }
+  ]
+
+  // List of regressions.
+  regressions: [
+    {
+      name: sanity
+      tests: ["uart_sanity"]
     }
   ]
 }

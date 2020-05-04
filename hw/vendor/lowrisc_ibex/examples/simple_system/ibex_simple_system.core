@@ -17,6 +17,11 @@ filesets:
       - ibex_simple_system.cc: { file_type: cppSource }
     file_type: systemVerilogSource
 
+  files_verilator_waiver:
+    files:
+      - lint/verilator_waiver.vlt: {file_type: vlt}
+
+
 parameters:
   RV32M:
     datatype: int
@@ -28,19 +33,43 @@ parameters:
     paramtype: vlogparam
     default: 0
     description: Enable the E ISA extension (reduced register set) [0/1]
+  RV32B:
+    datatype: int
+    paramtype: vlogparam
+    default: 0
+    description: Enable the B ISA extension (bit manipulation EXPERIMENTAL) [0/1]
   SRAM_INIT_FILE:
     datatype: str
     paramtype: vlogdefine
     description: Path to a vmem file to initialize the RAM with
+  MultiplierImplementation:
+    datatype: str
+    paramtype: vlogparam
+    description: "Multiplier implementation. Valid values: fast, slow, single-cycle"
+    default: "fast"
+  BranchTargetALU:
+    datatype: int
+    paramtype: vlogparam
+    default: 0
+    description: Enables seperate branch target ALU (increasing branch performance EXPERIMENTAL)
+  WritebackStage:
+    datatype: int
+    paramtype: vlogparam
+    default: 0
+    description: Enables third pipeline stage (EXPERIMENTAL)
 
 targets:
   sim:
     default_tool: verilator
     filesets:
+      - tool_verilator ? (files_verilator_waiver)
       - files_sim_verilator
     parameters:
       - RV32M
       - RV32E
+      - MultiplierImplementation
+      - BranchTargetALU
+      - WritebackStage
       - SRAM_INIT_FILE
     toplevel: ibex_simple_system
     tools:
@@ -69,4 +98,7 @@ targets:
           # XXX: Cleanup all warnings and remove this option
           # (or make it more fine-grained at least)
           - "-Wno-fatal"
+          # RAM primitives wider than 64bit (required for ECC) fail to build in
+          # Verilator without increasing the unroll count (see Verilator#1266)
+          - "--unroll-count 72"
 

@@ -16,7 +16,7 @@
 
 module rv_plic import rv_plic_reg_pkg::*; #(
   // derived parameter
-  localparam int SRCW    = $clog2(NumSrc+1)
+  localparam int SRCW    = $clog2(NumSrc)
 ) (
   input     clk_i,
   input     rst_ni,
@@ -34,8 +34,6 @@ module rv_plic import rv_plic_reg_pkg::*; #(
 
   output logic [NumTarget-1:0] msip_o
 );
-
-  import rv_plic_reg_pkg::*;
 
   rv_plic_reg2hw_t reg2hw;
   rv_plic_hw2reg_t hw2reg;
@@ -68,22 +66,22 @@ module rv_plic import rv_plic_reg_pkg::*; #(
   always_comb begin
     claim = '0;
     for (int i = 0 ; i < NumTarget ; i++) begin
-      if (claim_re[i]) claim[claim_id[i] -1] = 1'b1;
+      if (claim_re[i]) claim[claim_id[i]] = 1'b1;
     end
   end
   always_comb begin
     complete = '0;
     for (int i = 0 ; i < NumTarget ; i++) begin
-      if (complete_we[i]) complete[complete_id[i] -1] = 1'b1;
+      if (complete_we[i]) complete[complete_id[i]] = 1'b1;
     end
   end
 
-  //`ASSERT_PULSE(claimPulse, claim_re[i], clk_i, !rst_ni)
-  //`ASSERT_PULSE(completePulse, complete_we[i], clk_i, !rst_ni)
+  //`ASSERT_PULSE(claimPulse, claim_re[i])
+  //`ASSERT_PULSE(completePulse, complete_we[i])
 
-  `ASSERT(onehot0Claim, $onehot0(claim_re), clk_i, !rst_ni)
+  `ASSERT(onehot0Claim, $onehot0(claim_re))
 
-  `ASSERT(onehot0Complete, $onehot0(complete_we), clk_i, !rst_ni)
+  `ASSERT(onehot0Complete, $onehot0(complete_we))
 
   //////////////
   // Priority //
@@ -201,12 +199,15 @@ module rv_plic import rv_plic_reg_pkg::*; #(
   );
 
   // Assertions
-  `ASSERT_KNOWN(TlDValidKnownO_A, tl_o.d_valid, clk_i, !rst_ni)
-  `ASSERT_KNOWN(TlAReadyKnownO_A, tl_o.a_ready, clk_i, !rst_ni)
-  `ASSERT_KNOWN(IrqKnownO_A, irq_o, clk_i, !rst_ni)
-  `ASSERT_KNOWN(MsipKnownO_A, msip_o, clk_i, !rst_ni)
+  `ASSERT_KNOWN(TlDValidKnownO_A, tl_o.d_valid)
+  `ASSERT_KNOWN(TlAReadyKnownO_A, tl_o.a_ready)
+  `ASSERT_KNOWN(IrqKnownO_A, irq_o)
+  `ASSERT_KNOWN(MsipKnownO_A, msip_o)
   for (genvar k = 0; k < NumTarget; k++) begin : gen_irq_id_known
-    `ASSERT_KNOWN(IrqIdKnownO_A, irq_id_o[k], clk_i, !rst_ni)
+    `ASSERT_KNOWN(IrqIdKnownO_A, irq_id_o[k])
   end
+
+  // Assume
+  `ASSUME(Irq0Tied_A, intr_src_i[0] == 1'b0)
 
 endmodule

@@ -11,36 +11,28 @@ package chip_env_pkg;
   import tl_agent_pkg::*;
   import uart_agent_pkg::*;
   import jtag_agent_pkg::*;
+  import spi_agent_pkg::*;
   import dv_lib_pkg::*;
   import cip_base_pkg::*;
   import chip_ral_pkg::*;
-
-  // import individual env IP env pkgs
-  import uart_env_pkg::*;
-  import gpio_env_pkg::*;
-  import hmac_env_pkg::*;
-  import rv_timer_env_pkg::*;
-  import spi_device_env_pkg::*;
+  import sw_test_status_pkg::*;
 
   // macro includes
   `include "uvm_macros.svh"
   `include "dv_macros.svh"
 
   // local parameters and types
-  parameter         NUM_GPIOS   = 16;
+  parameter NUM_GPIOS = 16;
+
+  // SW constants
+  parameter bit [TL_AW-1:0] SW_DV_LOG_ADDR = 32'h1000fffc;
+  parameter bit [TL_AW-1:0] SW_DV_TEST_STATUS_ADDR = 32'h1000fff8;
 
   typedef virtual pins_if #(NUM_GPIOS)  gpio_vif;
   typedef virtual mem_bkdr_if           mem_bkdr_vif;
-  typedef virtual sw_msg_monitor_if     sw_msg_monitor_vif;
+  typedef virtual sw_logger_if          sw_logger_vif;
 
-  // enum to indicate cpu test pass / fail status
-  typedef enum bit [15:0] {
-    CpuUnderReset   = 16'hffff,   // cpu is held under reset
-    CpuTestRunning  = 16'hb004,   // cpu test running
-    CpuTestPass     = 16'hff00,   // cpu test passed
-    CpuTestFail     = 16'h00ff    // cpu test failed
-  } cpu_test_state_e;
-
+  // Types of memories in the chip.
   typedef enum {
     Rom,
     Ram,
@@ -48,9 +40,6 @@ package chip_env_pkg;
     FlashBank1,
     SpiMem
   } chip_mem_e;
-
-  typedef class chip_tl_seq_item;
-  typedef tl_reg_adapter #(.ITEM_T(chip_tl_seq_item)) chip_tl_reg_adapter;
 
   // functions
 
@@ -62,4 +51,5 @@ package chip_env_pkg;
   `include "chip_scoreboard.sv"
   `include "chip_env.sv"
   `include "chip_vseq_list.sv"
+
 endpackage

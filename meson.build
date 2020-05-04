@@ -22,20 +22,9 @@ project(
   ],
 )
 
-target = get_option('target')
-if target == 'undef'
-  error('target option not set. Please run meson with a valid build target option.')
-endif
-
 ot_version = get_option('ot_version')
 if ot_version == 'undef'
   error('ot_version option not set. Please run meson with a valid OpenTitan version option.')
-endif
-
-if target == 'sim-verilator'
-  # TODO: Consider using extra args array if using this flag globally is no
-  # longer OK.
-  add_project_arguments('-DSIMULATION', language: 'c')
 endif
 
 dev_bin_dir = get_option('dev_bin_dir')
@@ -43,6 +32,7 @@ host_bin_dir = get_option('host_bin_dir')
 if dev_bin_dir == 'undef' or host_bin_dir == 'undef'
   error('dev_bin_dir option not set. Please run meson with a valid binary directory option.')
 endif
+tock_local = get_option('tock_local')
 
 # C Arguments to optimize for size
 optimize_size_args = [
@@ -111,13 +101,25 @@ gen_hw_hdr = generator(
 
 # TODO: Considering moving these into hw/ip directories.
 hw_ip_aes_reg_h = gen_hw_hdr.process('hw/ip/aes/data/aes.hjson')
-hw_ip_flash_ctrl_regs_h = gen_hw_hdr.process('hw/ip/flash_ctrl/data/flash_ctrl.hjson')
+hw_ip_flash_ctrl_reg_h = gen_hw_hdr.process('hw/ip/flash_ctrl/data/flash_ctrl.hjson')
 hw_ip_gpio_reg_h = gen_hw_hdr.process('hw/ip/gpio/data/gpio.hjson')
 hw_ip_hmac_reg_h = gen_hw_hdr.process('hw/ip/hmac/data/hmac.hjson')
 hw_ip_spi_device_reg_h = gen_hw_hdr.process('hw/ip/spi_device/data/spi_device.hjson')
 hw_ip_rv_timer_reg_h = gen_hw_hdr.process('hw/ip/rv_timer/data/rv_timer.hjson')
 hw_ip_uart_reg_h = gen_hw_hdr.process('hw/ip/uart/data/uart.hjson')
 hw_ip_usbdev_reg_h = gen_hw_hdr.process('hw/ip/usbdev/data/usbdev.hjson')
-hw_top_earlgrey_pinmux_h = gen_hw_hdr.process('hw/top_earlgrey/ip/pinmux/data/autogen/pinmux.hjson')
+hw_top_earlgrey_pinmux_reg_h = gen_hw_hdr.process('hw/top_earlgrey/ip/pinmux/data/autogen/pinmux.hjson')
+hw_top_earlgrey_rv_plic_reg_h = gen_hw_hdr.process('hw/top_earlgrey/ip/rv_plic/data/autogen/rv_plic.hjson')
+
+# Top Earlgrey library (top_earlgrey)
+# The sources for this are generated into the hw hierarchy.
+top_earlgrey = declare_dependency(
+  link_with: static_library(
+    'top_earlgrey_ot',
+    sources: [
+      'hw/top_earlgrey/sw/autogen/top_earlgrey.c',
+    ],
+  )
+)
 
 subdir('sw')

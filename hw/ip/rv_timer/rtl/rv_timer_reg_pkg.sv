@@ -7,8 +7,8 @@
 package rv_timer_reg_pkg;
 
   // Param list
-  localparam int N_HARTS = 1;
-  localparam int N_TIMERS = 1;
+  parameter int N_HARTS = 1;
+  parameter int N_TIMERS = 1;
 
   ////////////////////////////
   // Typedefs for registers //
@@ -36,10 +36,12 @@ package rv_timer_reg_pkg;
 
   typedef struct packed {
     logic [31:0] q;
+    logic        qe;
   } rv_timer_reg2hw_compare_lower0_0_reg_t;
 
   typedef struct packed {
     logic [31:0] q;
+    logic        qe;
   } rv_timer_reg2hw_compare_upper0_0_reg_t;
 
   typedef struct packed {
@@ -76,12 +78,12 @@ package rv_timer_reg_pkg;
   // Register to internal design logic //
   ///////////////////////////////////////
   typedef struct packed {
-    rv_timer_reg2hw_ctrl_mreg_t [0:0] ctrl; // [152:152]
-    rv_timer_reg2hw_cfg0_reg_t cfg0; // [151:132]
-    rv_timer_reg2hw_timer_v_lower0_reg_t timer_v_lower0; // [131:100]
-    rv_timer_reg2hw_timer_v_upper0_reg_t timer_v_upper0; // [99:68]
-    rv_timer_reg2hw_compare_lower0_0_reg_t compare_lower0_0; // [67:36]
-    rv_timer_reg2hw_compare_upper0_0_reg_t compare_upper0_0; // [35:4]
+    rv_timer_reg2hw_ctrl_mreg_t [0:0] ctrl; // [154:154]
+    rv_timer_reg2hw_cfg0_reg_t cfg0; // [153:134]
+    rv_timer_reg2hw_timer_v_lower0_reg_t timer_v_lower0; // [133:102]
+    rv_timer_reg2hw_timer_v_upper0_reg_t timer_v_upper0; // [101:70]
+    rv_timer_reg2hw_compare_lower0_0_reg_t compare_lower0_0; // [69:37]
+    rv_timer_reg2hw_compare_upper0_0_reg_t compare_upper0_0; // [36:4]
     rv_timer_reg2hw_intr_enable0_mreg_t [0:0] intr_enable0; // [3:3]
     rv_timer_reg2hw_intr_state0_mreg_t [0:0] intr_state0; // [2:2]
     rv_timer_reg2hw_intr_test0_mreg_t [0:0] intr_test0; // [1:0]
@@ -97,15 +99,15 @@ package rv_timer_reg_pkg;
   } rv_timer_hw2reg_t;
 
   // Register Address
-  parameter RV_TIMER_CTRL_OFFSET = 9'h 0;
-  parameter RV_TIMER_CFG0_OFFSET = 9'h 100;
-  parameter RV_TIMER_TIMER_V_LOWER0_OFFSET = 9'h 104;
-  parameter RV_TIMER_TIMER_V_UPPER0_OFFSET = 9'h 108;
-  parameter RV_TIMER_COMPARE_LOWER0_0_OFFSET = 9'h 10c;
-  parameter RV_TIMER_COMPARE_UPPER0_0_OFFSET = 9'h 110;
-  parameter RV_TIMER_INTR_ENABLE0_OFFSET = 9'h 114;
-  parameter RV_TIMER_INTR_STATE0_OFFSET = 9'h 118;
-  parameter RV_TIMER_INTR_TEST0_OFFSET = 9'h 11c;
+  parameter logic [8:0] RV_TIMER_CTRL_OFFSET = 9'h 0;
+  parameter logic [8:0] RV_TIMER_CFG0_OFFSET = 9'h 100;
+  parameter logic [8:0] RV_TIMER_TIMER_V_LOWER0_OFFSET = 9'h 104;
+  parameter logic [8:0] RV_TIMER_TIMER_V_UPPER0_OFFSET = 9'h 108;
+  parameter logic [8:0] RV_TIMER_COMPARE_LOWER0_0_OFFSET = 9'h 10c;
+  parameter logic [8:0] RV_TIMER_COMPARE_UPPER0_0_OFFSET = 9'h 110;
+  parameter logic [8:0] RV_TIMER_INTR_ENABLE0_OFFSET = 9'h 114;
+  parameter logic [8:0] RV_TIMER_INTR_STATE0_OFFSET = 9'h 118;
+  parameter logic [8:0] RV_TIMER_INTR_TEST0_OFFSET = 9'h 11c;
 
 
   // Register Index
@@ -122,7 +124,7 @@ package rv_timer_reg_pkg;
   } rv_timer_id_e;
 
   // Register width information to check illegal writes
-  localparam logic [3:0] RV_TIMER_PERMIT [9] = '{
+  parameter logic [3:0] RV_TIMER_PERMIT [9] = '{
     4'b 0001, // index[0] RV_TIMER_CTRL
     4'b 0111, // index[1] RV_TIMER_CFG0
     4'b 1111, // index[2] RV_TIMER_TIMER_V_LOWER0

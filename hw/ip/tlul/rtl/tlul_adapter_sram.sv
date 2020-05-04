@@ -9,6 +9,9 @@
  *   it means that aliasing can happen if target slave size in TL-UL crossbar is bigger
  *   than SRAM size
  */
+
+`include "prim_assert.sv"
+
 module tlul_adapter_sram #(
   parameter int SramAw      = 12,
   parameter int SramDw      = 32, // Current version supports TL-UL width only
@@ -50,6 +53,7 @@ module tlul_adapter_sram #(
   typedef struct packed {
     req_op_e                    op ;
     logic                       error ;
+    logic [top_pkg::TL_DW-1:0]  mask ;
     logic [top_pkg::TL_SZW-1:0] size ;
     logic [top_pkg::TL_AIW-1:0] source ;
   } req_t ;
@@ -148,14 +152,16 @@ module tlul_adapter_sram #(
   `ASSERT_INIT(TlUlEqualsToSramDw, top_pkg::TL_DW == SramDw)
 
   // Convert byte mask to SRAM bit mask.
+  logic [top_pkg::TL_DW-1:0] rmask;
   always_comb begin
     for (int i = 0 ; i < top_pkg::TL_DW/8 ; i++) begin
       wmask_o[8*i+:8] = (tl_i.a_valid) ? {8{tl_i.a_mask[i]}} : '0;
       // only forward valid data here.
       wdata_o[8*i+:8] = (tl_i.a_mask[i] && we_o) ? tl_i.a_data[8*i+:8] : '0;
+      // mask for read data
+      rmask[8*i+:8] = {8{reqfifo_rdata.mask[i]}};
     end
   end
-
 
   // Begin: Request Error Detection
 
@@ -191,6 +197,7 @@ module tlul_adapter_sram #(
   assign reqfifo_wvalid = a_ack ; // Push to FIFO only when granted
   assign reqfifo_wdata  = '{
     op:     (tl_i.a_opcode != Get) ? OpWrite : OpRead, // To return AccessAck for opcode error
+    mask:   tl_i.a_mask,
     error:  error_internal,
     size:   tl_i.a_size,
     source: tl_i.a_source
@@ -199,7 +206,7 @@ module tlul_adapter_sram #(
 
   assign rspfifo_wvalid = rvalid_i & reqfifo_rvalid;
   assign rspfifo_wdata  = '{
-    data:  rdata_i,
+    data:  rdata_i & rmask, // make sure only requested bytes are forwarded
     error: rerror_i[1]  // Only care for Uncorrectable error
   };
   assign rspfifo_rready = (reqfifo_rdata.op == OpRead & ~reqfifo_rdata.error)
@@ -215,15 +222,17 @@ module tlul_adapter_sram #(
   //    responses), storing the request is necessary. And if the read entry
   //    is write op, it is safe to return the response right away. If it is
   //    read reqeust, then D response is waiting until read data arrives.
-  prim_fifo_sync #(
-    .Width  (ReqFifoWidth),
-    .Pass   (1'b0),
+
+  // Notes:
   // The oustanding+1 allows the reqfifo to absorb back to back transactions
   // without any wait states.  Alternatively, the depth can be kept as
   // oustanding as long as the outgoing ready is qualified with the acceptance
   // of the response in the same cycle.  Doing so however creates a path from
   // ready_i to ready_o, which may not be desireable.
-    .Depth  (Outstanding+1'b1)
+  prim_fifo_sync #(
+    .Width  (ReqFifoWidth),
+    .Pass   (1'b0),
+    .Depth  (Outstanding)
   ) u_reqfifo (
     .clk_i,
     .rst_ni,
@@ -261,21 +270,21 @@ module tlul_adapter_sram #(
   );
 
   // below assertion fails when SRAM rvalid is asserted even though ReqFifo is empty
-  `ASSERT(rvalidHighReqFifoEmpty, rvalid_i |-> reqfifo_rvalid, clk_i, !rst_ni)
+  `ASSERT(rvalidHighReqFifoEmpty, rvalid_i |-> reqfifo_rvalid)
 
   // below assertion fails when outstanding value is too small (SRAM rvalid is asserted
   // even though the RspFifo is full)
-  `ASSERT(rvalidHighWhenRspFifoFull, rvalid_i |-> rspfifo_wready, clk_i, !rst_ni)
+  `ASSERT(rvalidHighWhenRspFifoFull, rvalid_i |-> rspfifo_wready)
 
   // If both ErrOnWrite and ErrOnRead are set, this block is useless
   `ASSERT_INIT(adapterNoReadOrWrite, (ErrOnWrite & ErrOnRead) == 0)
 
   // make sure outputs are defined
-  `ASSERT_KNOWN(TlOutKnown_A,    tl_o,    clk_i, !rst_ni)
-  `ASSERT_KNOWN(ReqOutKnown_A,   req_o,   clk_i, !rst_ni)
-  `ASSERT_KNOWN(WeOutKnown_A,    we_o,    clk_i, !rst_ni)
-  `ASSERT_KNOWN(AddrOutKnown_A,  addr_o,  clk_i, !rst_ni)
-  `ASSERT_KNOWN(WdataOutKnown_A, wdata_o, clk_i, !rst_ni)
-  `ASSERT_KNOWN(WmaskOutKnown_A, wmask_o, clk_i, !rst_ni)
+  `ASSERT_KNOWN(TlOutKnown_A,    tl_o   )
+  `ASSERT_KNOWN(ReqOutKnown_A,   req_o  )
+  `ASSERT_KNOWN(WeOutKnown_A,    we_o   )
+  `ASSERT_KNOWN(AddrOutKnown_A,  addr_o )
+  `ASSERT_KNOWN(WdataOutKnown_A, wdata_o)
+  `ASSERT_KNOWN(WmaskOutKnown_A, wmask_o)
 
 endmodule

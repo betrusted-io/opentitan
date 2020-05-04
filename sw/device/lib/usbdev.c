@@ -6,8 +6,10 @@
 
 #include "sw/device/lib/common.h"
 
-#define USBDEV_BASE_ADDR 0x40020000
+#include "hw/top_earlgrey/sw/autogen/top_earlgrey.h"
 #include "usbdev_regs.h"  // Generated.
+
+#define USBDEV_BASE_ADDR TOP_EARLGREY_USBDEV_BASE_ADDR
 
 #define EXTRACT(n, f) ((n >> USBDEV_##f##_OFFSET) & USBDEV_##f##_MASK)
 
@@ -134,14 +136,15 @@ void usbdev_poll(usbdev_ctx_t *ctx) {
     // Clear the interupt
     REG32(USBDEV_INTR_STATE()) = (1 << USBDEV_INTR_STATE_PKT_RECEIVED);
   }
-  if (istate & ~((1 << USBDEV_INTR_STATE_PKT_RECEIVED) |
-                 (1 << USBDEV_INTR_STATE_PKT_SENT))) {
+  if (istate &
+      ~((1 << USBDEV_INTR_STATE_PKT_RECEIVED) |
+        (1 << USBDEV_INTR_STATE_PKT_SENT))) {
     TRC_C('I');
     TRC_I(istate, 12);
     TRC_C(' ');
-    REG32(USBDEV_INTR_STATE()) =
-        istate & ~((1 << USBDEV_INTR_STATE_PKT_RECEIVED) |
-                   (1 << USBDEV_INTR_STATE_PKT_SENT));
+    REG32(USBDEV_INTR_STATE()) = istate &
+                                 ~((1 << USBDEV_INTR_STATE_PKT_RECEIVED) |
+                                   (1 << USBDEV_INTR_STATE_PKT_SENT));
     if (istate & (1 << USBDEV_INTR_ENABLE_LINK_RESET)) {
       // Link reset
       for (int ep = 0; ep < NUM_ENDPOINTS; ep++) {

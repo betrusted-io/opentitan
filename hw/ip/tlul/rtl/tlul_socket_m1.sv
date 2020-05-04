@@ -20,8 +20,10 @@
 //   DReqDepth:     Same as HReqDepth but for device request FIFO.
 //   DRspDepth:     Same as HReqDepth but for device response FIFO.
 
+`include "prim_assert.sv"
+
 module tlul_socket_m1 #(
-  parameter               M         = 4,
+  parameter int unsigned  M         = 4,
   parameter bit [M-1:0]   HReqPass  = {M{1'b1}},
   parameter bit [M-1:0]   HRspPass  = {M{1'b1}},
   parameter bit [M*4-1:0] HReqDepth = {M{4'h2}},
@@ -67,8 +69,8 @@ module tlul_socket_m1 #(
   //
   // Required ID width to distinguish between host ports
   //  Used in response steering
-  localparam IDW   = top_pkg::TL_AIW;
-  localparam STIDW = $clog2(M);
+  localparam int unsigned IDW   = top_pkg::TL_AIW;
+  localparam int unsigned STIDW = $clog2(M);
 
   tlul_pkg::tl_h2d_t hreq_fifo_o [M];
   tlul_pkg::tl_d2h_t hrsp_fifo_i [M];
@@ -96,7 +98,7 @@ module tlul_socket_m1 #(
       reqid_sub
     };
 
-  `ASSERT(idInRange, tl_h_i[i].a_valid |-> tl_h_i[i].a_source[IDW-1 -:STIDW] == '0, clk_i, !rst_ni)
+  `ASSERT(idInRange, tl_h_i[i].a_valid |-> tl_h_i[i].a_source[IDW-1 -:STIDW] == '0)
 
     // assign not connected bits to nc_* signal to make lint happy
     logic [IDW-1 : IDW-STIDW] unused_tl_h_source;
@@ -163,21 +165,39 @@ module tlul_socket_m1 #(
 
   assign arb_ready = drsp_fifo_o.a_ready;
 
-  prim_arbiter #(
-    .N      (M),
-    .DW     ($bits(tlul_pkg::tl_h2d_t))
-  ) u_reqarb (
-    .clk_i,
-    .rst_ni,
-
-    .req        (hrequest),
-    .req_data   (hreq_fifo_o),
-    .gnt        (hgrant),
-
-    .arb_valid,
-    .arb_data,
-    .arb_ready
-  );
+  if (tlul_pkg::ArbiterImpl == "PPC") begin : gen_arb_ppc
+    prim_arbiter_ppc #(
+      .N      (M),
+      .DW     ($bits(tlul_pkg::tl_h2d_t))
+    ) u_reqarb (
+      .clk_i,
+      .rst_ni,
+      .req_i   ( hrequest    ),
+      .data_i  ( hreq_fifo_o ),
+      .gnt_o   ( hgrant      ),
+      .idx_o   (             ),
+      .valid_o ( arb_valid   ),
+      .data_o  ( arb_data    ),
+      .ready_i ( arb_ready   )
+    );
+  end else if (tlul_pkg::ArbiterImpl == "BINTREE") begin : gen_tree_arb
+    prim_arbiter_tree #(
+      .N      (M),
+      .DW     ($bits(tlul_pkg::tl_h2d_t))
+    ) u_reqarb (
+      .clk_i,
+      .rst_ni,
+      .req_i   ( hrequest    ),
+      .data_i  ( hreq_fifo_o ),
+      .gnt_o   ( hgrant      ),
+      .idx_o   (             ),
+      .valid_o ( arb_valid   ),
+      .data_o  ( arb_data    ),
+      .ready_i ( arb_ready   )
+    );
+  end else begin : gen_unknown
+    `ASSERT_INIT(UnknownArbImpl_A, 0)
+  end
 
   logic [  M-1:0] hfifo_rspvalid;
   logic [  M-1:0] dfifo_rspready;
@@ -233,6 +253,6 @@ module tlul_socket_m1 #(
 
   // this assertion fails when rspid[0+:STIDW] not in [0..M-1]
   `ASSERT(rspIdInRange, drsp_fifo_o.d_valid |->
-      drsp_fifo_o.d_source[0+:STIDW] >= 0 && drsp_fifo_o.d_source[0+:STIDW] < M, clk_i, !rst_ni)
+      drsp_fifo_o.d_source[0+:STIDW] >= 0 && drsp_fifo_o.d_source[0+:STIDW] < M)
 
 endmodule

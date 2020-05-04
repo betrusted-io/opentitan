@@ -20,6 +20,7 @@
               +incdir+<user_extension>
              -f <cwd>/files.f -full64
              -l <out>/compile.log
+             -LDFLAGS '-Wl,--no-as-needed'
              -Mdir=<out>/vcs_simv.csrc
              -o <out>/vcs_simv <cmp_opts> <cov_opts> "
     cov_opts: >
@@ -28,7 +29,7 @@
     cmd: >
       <out>/vcs_simv +vcs+lic+wait <sim_opts> +ntb_random_seed=<seed> <cov_opts>
     cov_opts: >
-      -cm_dir <out>/test.vdb -cm_log /dev/null -cm_name test_<seed>
+      -cm_dir <out>/test.vdb -cm_log /dev/null -cm_name test_<seed>_<test_id>
 
 - tool: ius
   compile:
@@ -42,7 +43,7 @@
               -l <out>/compile.log <cmp_opts>"
   sim:
     cmd: >
-      irun -R <sim_opts> -svseed <seed>
+      irun -R <sim_opts> -svseed <seed> -svrnc rand_struct
 
 - tool: questa
   compile:
@@ -68,7 +69,6 @@
     cov_opts: >
       -do "coverage save -onexit <out>/cov.ucdb;"
 
-# TODO: Remove +DEPRECATED for dsim
 - tool: dsim
   env_var: DSIM,DSIM_LIB_PATH
   compile:
@@ -77,9 +77,9 @@
       - "<DSIM> -sv -work <out>/dsim
                 -genimage image
                 +incdir+$UVM_HOME/src
-                +define+DEPRECATED
                 $UVM_HOME/src/uvm_pkg.sv
                 +define+DSIM
+                -suppress EnumMustBePositive
                 +incdir+<setting>
                 +incdir+<user_extension>
                 -f <cwd>/files.f
@@ -102,3 +102,20 @@
       qrun -64 -simulate -snapshot design_opt -c <cov_opts> <sim_opts> -sv_seed <seed> -outdir <out>/qrun.out
     cov_opts: >
       -coverage -ucdb <out>/cov.ucdb
+
+- tool: riviera
+  compile:
+    cmd:
+      - "vlib <out>/work"
+      - "vlog -work <out>/work
+        -uvmver 1.2
+        +define+UVM_REGEX_NO_DPI
+        +incdir+<setting>
+        +incdir+<user_extension>
+        -f <cwd>/files.f
+        <cmp_opts>"
+  sim:
+    cmd: >
+      vsim -c <sim_opts> -sv_seed <seed> <cov_opts> -do <cwd>/riviera_sim.tcl
+    cov_opts: >
+      -acdb_file <out>/cov.acdb

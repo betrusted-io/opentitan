@@ -4,15 +4,15 @@
 
 class cip_base_env_cfg #(type RAL_T = dv_base_reg_block) extends dv_base_env_cfg #(RAL_T);
   // ext component cfgs
-  rand tl_agent_cfg     m_tl_agent_cfg;
-  rand alert_agent_cfg  m_alert_agent_cfg[string];
+  rand tl_agent_cfg        m_tl_agent_cfg;
+  rand alert_esc_agent_cfg m_alert_agent_cfg[string];
 
   // common interfaces - intrrupts and alerts
   intr_vif              intr_vif;
   devmode_vif           devmode_vif;
-  tlul_assert_ctrl_vif  tlul_assert_ctrl_vif;
 
   // only security IP can support devmode. If supported, override it to 1 in initialize()
+  bit                   has_devmode = 1;
   bit                   en_devmode = 0;
 
   uint                  num_interrupts;

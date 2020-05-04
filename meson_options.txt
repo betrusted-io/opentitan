@@ -1,15 +1,4 @@
 option(
-  'target',
-  type: 'combo',
-  choices: [
-    'sim-verilator',
-    'fpga',
-    'undef',
-  ],
-  value: 'undef',
-)
-
-option(
   'dev_bin_dir',
   type: 'string',
   value: 'undef',
@@ -25,4 +14,10 @@ option(
   'ot_version',
   type: 'string',
   value: 'undef',
+)
+
+option(
+  'tock_local',
+  type: 'boolean',
+  value: false,
 )

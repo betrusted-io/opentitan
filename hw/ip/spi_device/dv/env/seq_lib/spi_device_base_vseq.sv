@@ -24,14 +24,59 @@ class spi_device_base_vseq extends cip_base_vseq #(
   rand uint sram_host_limit_addr;
   rand uint sram_device_base_addr;
   rand uint sram_device_limit_addr;
+  // helper variables
+  rand uint num_host_sram_words;
+  rand uint num_device_sram_words;
+  rand uint sram_host_byte_size;
+  rand uint sram_device_byte_size;
+
+  rand bit [15:0] tx_watermark_lvl;
+  rand bit [15:0] rx_watermark_lvl;
+
+  // core clk freq / spi clk freq is from 1/4 to 8. use below 2 var to represent the ratio
+  // if spi_freq_faster,  core_spi_freq_ratio = spi clk freq / core clk freq (1:4)
+  // if !spi_freq_faster, core_spi_freq_ratio = core clk freq / spi clk freq (1:8)
+  rand uint core_spi_freq_ratio;
+  rand bit  spi_freq_faster;
 
   // override it in random seq
-  constraint sram_constraints_c {
+  constraint sram_addr_c {
     // host and device addr space within sram should not overlap
     sram_host_base_addr == 32'h0;
     sram_host_limit_addr == 32'h1ff; // 512 bytes
     sram_device_base_addr == 32'h200;
     sram_device_limit_addr == 32'h3ff; // 512 bytes
+  }
+
+  constraint sram_size_c {
+    solve num_host_sram_words before sram_host_byte_size;
+    solve num_device_sram_words before sram_device_byte_size;
+    num_host_sram_words   == sram_host_limit_addr[31:2] - sram_host_base_addr[31:2] + 1;
+    num_device_sram_words == sram_device_limit_addr[31:2] - sram_device_base_addr[31:2] + 1;
+    sram_host_byte_size   == num_host_sram_words << 2;
+    sram_device_byte_size == num_device_sram_words << 2;
+  }
+
+  constraint tx_watermark_lvl_c {
+    tx_watermark_lvl dist {
+      [0 : SRAM_WORD_SIZE]                                       :/ 1, // first 2 words
+      [SRAM_WORD_SIZE+1 : sram_host_byte_size-1-SRAM_WORD_SIZE]  :/ 7,
+      [sram_host_byte_size-SRAM_WORD_SIZE : sram_host_byte_size] :/ 1, // max 2 words
+      [sram_host_byte_size+1 : SRAM_SIZE]                        :/ 1};// over the max size
+  }
+
+  constraint rx_watermark_lvl_c {
+    rx_watermark_lvl dist {
+      [0 : SRAM_WORD_SIZE]                                           :/ 1, // first 2 words
+      [SRAM_WORD_SIZE+1 : sram_device_byte_size-1-SRAM_WORD_SIZE]    :/ 7,
+      [sram_device_byte_size-SRAM_WORD_SIZE : sram_device_byte_size] :/ 1, // max 2 words
+      [sram_device_byte_size+1 : SRAM_SIZE]                          :/ 1};// over the max size
+  }
+
+  // core clk freq / spi clk freq is from 1/4 to 8
+  constraint freq_c {
+    core_spi_freq_ratio inside {[1:8]};
+    spi_freq_faster -> core_spi_freq_ratio <= 4;
   }
 
   `uvm_object_new
@@ -64,8 +109,13 @@ class spi_device_base_vseq extends cip_base_vseq #(
   // rx is data received over mosi (host traffic from SPI agent)
 
   // TODO: use spi_device_pkg spi_mode enum instead
-  // TODO: randomize spi sck period (cfg.m_spi_agent_cfg.sck_period_ns)
   virtual task spi_device_init();
+    // set clk period
+    if (spi_freq_faster) begin
+      cfg.m_spi_agent_cfg.sck_period_ps = cfg.clk_rst_vif.clk_period_ps / core_spi_freq_ratio;
+    end else begin
+      cfg.m_spi_agent_cfg.sck_period_ps = cfg.clk_rst_vif.clk_period_ps * core_spi_freq_ratio;
+    end
     // update host agent
     cfg.m_spi_agent_cfg.sck_polarity = sck_polarity;
     cfg.m_spi_agent_cfg.sck_phase = sck_phase;
@@ -80,11 +130,25 @@ class spi_device_base_vseq extends cip_base_vseq #(
     ral.cfg.rx_order.set(host_bit_dir);
     //ral.cfg.timer_v.set(rx_timer); TODO do it later
     csr_update(.csr(ral.cfg));
+
+    // watermark
+    ral.fifo_level.txlvl.set(tx_watermark_lvl);
+    ral.fifo_level.rxlvl.set(rx_watermark_lvl);
+    csr_update(.csr(ral.fifo_level));
+
+    // intr_enable
+    `DV_CHECK_RANDOMIZE_FATAL(ral.intr_enable)
+    csr_update(.csr(ral.intr_enable));
+
     if (do_spi_device_mem_cfg) begin
       set_sram_host_addr_range(sram_host_base_addr, sram_host_limit_addr);
       set_sram_device_addr_range(sram_device_base_addr, sram_device_limit_addr);
       // only configure sram once
       do_spi_device_mem_cfg = 0;
+      sram_host_base_addr.rand_mode(0);
+      sram_host_limit_addr.rand_mode(0);
+      sram_device_base_addr.rand_mode(0);
+      sram_device_limit_addr.rand_mode(0);
     end
   endtask
 
@@ -113,8 +177,8 @@ class spi_device_base_vseq extends cip_base_vseq #(
   endtask
 
   // set a byte of data via host agent, receive a byte of data from spi_device
-  virtual task spi_host_xfer_byte(logic [7:0] host_data, ref logic [7:0] device_data);
-    spi_host_seq m_spi_host_seq = spi_host_seq::type_id::create("m_spi_host_seq");
+  virtual task spi_host_xfer_byte(bit [7:0] host_data, ref bit [7:0] device_data);
+    spi_host_seq m_spi_host_seq;
     `uvm_create_on(m_spi_host_seq, p_sequencer.spi_sequencer_h)
     `DV_CHECK_RANDOMIZE_WITH_FATAL(m_spi_host_seq,
                                    data.size() == 1;
@@ -124,8 +188,8 @@ class spi_device_base_vseq extends cip_base_vseq #(
   endtask
 
   // set a word (32 bits) of data via host agent, receive a word of data from spi_device
-  virtual task spi_host_xfer_word(logic [31:0] host_data, ref logic [31:0] device_data);
-    spi_host_seq m_spi_host_seq = spi_host_seq::type_id::create("m_spi_host_seq");
+  virtual task spi_host_xfer_word(bit [31:0] host_data, ref bit [31:0] device_data);
+    spi_host_seq m_spi_host_seq;
     byte data_bytes[SRAM_WORD_SIZE];
     {<<8{data_bytes}} = host_data;
     `uvm_create_on(m_spi_host_seq, p_sequencer.spi_sequencer_h)
@@ -138,8 +202,8 @@ class spi_device_base_vseq extends cip_base_vseq #(
 
   // set a random chunk of bytes of data via host agent and receive same number of data from device
   virtual task spi_host_xfer_bytes(int num_bytes = $urandom_range(1, 512),
-                                   ref logic [7:0] device_data[$]);
-    spi_host_seq m_spi_host_seq = spi_host_seq::type_id::create("m_spi_host_seq");
+                                   ref bit [7:0] device_data[$]);
+    spi_host_seq m_spi_host_seq;
     `uvm_create_on(m_spi_host_seq, p_sequencer.spi_sequencer_h)
     `DV_CHECK_RANDOMIZE_WITH_FATAL(m_spi_host_seq, data.size() == num_bytes;)
     `uvm_send(m_spi_host_seq)
@@ -147,7 +211,7 @@ class spi_device_base_vseq extends cip_base_vseq #(
   endtask
 
   // write spi device data to send when incoming host traffic arrives
-  virtual task write_device_words_to_send(logic [31:0] device_data[$]);
+  virtual task write_device_words_to_send(bit [31:0] device_data[$]);
     bit [TL_DW-1:0] tx_wptr;
     uint tx_sram_size_bytes = `get_tx_allocated_sram_size_bytes;
 
@@ -177,7 +241,7 @@ class spi_device_base_vseq extends cip_base_vseq #(
   endtask
 
   // read spi host data received from the host
-  virtual task read_host_words_rcvd(uint num_words, ref logic [31:0] host_data[$]);
+  virtual task read_host_words_rcvd(uint num_words, ref bit [31:0] host_data[$]);
     bit [TL_DW-1:0] rx_rptr;
     uint rx_sram_size_bytes = `get_rx_allocated_sram_size_bytes;
 
@@ -185,7 +249,7 @@ class spi_device_base_vseq extends cip_base_vseq #(
     rx_rptr = ral.rxf_ptr.rptr.get_mirrored_value();
     repeat (num_words) begin
       bit   [TL_DW-1:0] rx_rptr_addr;
-      logic [TL_DW-1:0] word_data;
+      bit   [TL_DW-1:0] word_data;
       bit   [TL_DW-1:0] rx_base_addr = ral.rxf_addr.base.get_mirrored_value();
       rx_base_addr[1:0] = 0; // ignore lower 2 bits
       rx_rptr_addr = cfg.sram_start_addr + rx_base_addr + rx_rptr[SRAM_MSB:0];

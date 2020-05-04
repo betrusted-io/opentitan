@@ -1,3 +1,7 @@
+IBEX_CONFIG ?= small-3cmult
+
+FUSESOC_CONFIG_OPTS = $(shell ./util/ibex_config.py $(IBEX_CONFIG) fusesoc_opts)
+
 all: help
 
 .PHONY: help
@@ -7,7 +11,7 @@ help:
 	@echo "or how to set-up the different environments."
 
 # Use a parallel run (make -j N) for a faster build
-build-all: build-riscv-compliance build-simple-system build-arty \
+build-all: build-riscv-compliance build-simple-system build-arty-100 \
       build-csr-test
 
 
@@ -15,7 +19,8 @@ build-all: build-riscv-compliance build-simple-system build-arty \
 .PHONY: build-riscv-compliance
 build-riscv-compliance:
 	fusesoc --cores-root=. run --target=sim --setup --build \
-		lowrisc:ibex:ibex_riscv_compliance
+		lowrisc:ibex:ibex_riscv_compliance \
+		$(FUSESOC_CONFIG_OPTS)
 
 
 # Simple system
@@ -25,7 +30,8 @@ build-riscv-compliance:
 .PHONY: build-simple-system
 build-simple-system:
 	fusesoc --cores-root=. run --target=sim --setup --build \
-		lowrisc:ibex:ibex_simple_system
+		lowrisc:ibex:ibex_simple_system \
+		$(FUSESOC_CONFIG_OPTS)
 
 simple-system-program = examples/sw/simple_system/hello_test/hello_test.vmem
 sw-simple-hello: $(simple-system-program)
@@ -46,9 +52,10 @@ run-simple-system: sw-simple-hello | $(Vibex_simple_system)
 		--raminit=$(simple-system-program)
 
 
-# Arty A7 100T
-# Use the following targets:
-# - "build-arty"
+# Arty A7 FPGA example
+# Use the following targets (depending on your hardware):
+# - "build-arty-35"
+# - "build-arty-100"
 # - "program-arty"
 arty-sw-program = examples/sw/led/led.vmem
 sw-led: $(arty-sw-program)
@@ -57,19 +64,27 @@ sw-led: $(arty-sw-program)
 $(arty-sw-program):
 	cd examples/sw/led && $(MAKE)
 
-build-arty: sw-led
+.PHONY: build-arty-35
+build-arty-35: sw-led
 	fusesoc --cores-root=. run --target=synth --setup --build \
-		lowrisc:ibex:top_artya7_100
+		lowrisc:ibex:top_artya7 --part xc7a35ticsg324-1L
+
+.PHONY: build-arty-100
+build-arty-100: sw-led
+	fusesoc --cores-root=. run --target=synth --setup --build \
+		lowrisc:ibex:top_artya7 --part xc7a100tcsg324-1
 
 .PHONY: program-arty
 program-arty:
-	fusesoc --cores-root=. pgm lowrisc:ibex:top_artya7_100
+	fusesoc --cores-root=. run --target=synth --run \
+		lowrisc:ibex:top_artya7
 
 
 # Lint check
 .PHONY: lint-core-tracing
 lint-core-tracing:
-	fusesoc --cores-root . run --target=lint lowrisc:ibex:ibex_core_tracing
+	fusesoc --cores-root . run --target=lint lowrisc:ibex:ibex_core_tracing \
+		$(FUSESOC_CONFIG_OPTS)
 
 
 # CS Registers testbench
@@ -91,3 +106,8 @@ $(Vtb_cs_registers):
 run-csr-test: | $(Vtb_cs_registers)
 	fusesoc --cores-root=. run --target=sim --run \
 	      --tool=verilator lowrisc:ibex:tb_cs_registers
+
+# Echo the parameters passed to fusesoc for the chosen IBEX_CONFIG
+.PHONY: test-cfg
+test-cfg:
+	@echo $(FUSESOC_CONFIG_OPTS)

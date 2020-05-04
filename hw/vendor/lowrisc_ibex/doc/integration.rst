@@ -19,7 +19,11 @@ Instantiation Template
       .MHPMCounterWidth         ( 40           ),
       .RV32E                    ( 0            ),
       .RV32M                    ( 1            ),
+      .RV32B                    ( 0            ),
       .MultiplierImplementation ( "fast"       ),
+      .ICache                   ( 0            ),
+      .ICacheECC                ( 0            ),
+      .SecureIbex               ( 0            ),
       .DbgTriggerEn             ( 0            ),
       .DmHaltAddr               ( 32'h1A110800 ),
       .DmExceptionAddr          ( 32'h1A110808 )
@@ -87,7 +91,28 @@ Parameters
 +------------------------------+-------------+------------+-----------------------------------------------------------------+
 | ``RV32M``                    | bit         | 1          | M(ultiply) extension enable                                     |
 +------------------------------+-------------+------------+-----------------------------------------------------------------+
-| ``MultiplierImplementation`` | string      | "fast"     | Multiplicator type, "slow", or "fast"                           |
+| ``RV32B``                    | bit         | 0          | *EXPERIMENTAL* - B(itmanipulation) extension enable:            |
+|                              |             |            | Currently supported Z-extensions: Zbb (base)                    |
++------------------------------+-------------+------------+-----------------------------------------------------------------+
+| ``BranchTargetALU``          | bit         | 0          | *EXPERIMENTAL* - Enables branch target ALU removing a stall     |
+|                              |             |            | cycle from taken branches                                       |
++------------------------------+-------------+------------+-----------------------------------------------------------------+
+| ``WritebackStage``           | bit         | 0          | *EXPERIMENTAL* - Enables third pipeline stage (writeback)       |
+|                              |             |            | improving performance of loads and stores                       |
++------------------------------+-------------+------------+-----------------------------------------------------------------+
+| ``MultiplierImplementation`` | string      | "fast"     | Multiplicator type:                                             |
+|                              |             |            | "slow": multi-cycle slow,                                       |
+|                              |             |            | "fast": multi-cycle fast,                                       |
+|                              |             |            | "single-cycle": single-cycle                                    |
++------------------------------+-------------+------------+-----------------------------------------------------------------+
+| ``ICache``                   | bit         | 0          | *EXPERIMENTAL* Enable instruction cache instead of prefetch     |
+|                              |             |            | buffer                                                          |
++------------------------------+-------------+------------+-----------------------------------------------------------------+
+| ``ICacheECC``                | bit         | 0          | *EXPERIMENTAL* Enable SECDED ECC protection in ICache (if       |
+|                              |             |            | ICache == 1)                                                    |
++------------------------------+-------------+------------+-----------------------------------------------------------------+
+| ``SecureIbex``               | bit         | 0          | *EXPERIMENTAL* Enable various additional features targeting     |
+|                              |             |            | secure code execution.                                          |
 +------------------------------+-------------+------------+-----------------------------------------------------------------+
 | ``DbgTriggerEn``             | bit         | 0          | Enable debug trigger support (one trigger only)                 |
 +------------------------------+-------------+------------+-----------------------------------------------------------------+
@@ -95,6 +120,8 @@ Parameters
 +------------------------------+-------------+------------+-----------------------------------------------------------------+
 | ``DmExceptionAddr``          | int         | 0x1A110808 | Address to jump to when an exception occurs while in Debug Mode |
 +------------------------------+-------------+------------+-----------------------------------------------------------------+
+
+Any parameter marked *EXPERIMENTAL* when enabled is not verified to the same standard as the rest of the Ibex core.
 
 Interfaces
 ----------

@@ -11,6 +11,9 @@
   // Top level testbench name (sv module).
   tb: tb
 
+  // Simulator used to sign off this block
+  tool: vcs
+
   // Fusesoc core file used for building the file list.
   fusesoc_core: lowrisc:dv:alert_handler_sim:0.1
 
@@ -29,6 +32,9 @@
                 "{proj_root}/hw/dv/data/tests/tl_access_tests.hjson",
                 "{proj_root}/hw/dv/data/tests/stress_tests.hjson"]
 
+  // Add additional tops for simulation.
+  sim_tops: ["-top alert_handler_bind"]
+
   // Default iterations for all tests - each test entry can override this.
   reseed: 50
 
@@ -41,6 +47,49 @@
     {
       name: alert_handler_sanity
       uvm_test_seq: alert_handler_sanity_vseq
+    }
+
+    {
+      name: alert_handler_random_alerts
+      uvm_test_seq: alert_handler_random_alerts_vseq
+    }
+
+    {
+      name: alert_handler_random_classes
+      uvm_test_seq: alert_handler_random_classes_vseq
+    }
+
+    {
+      name: alert_handler_esc_intr_timeout
+      uvm_test_seq: alert_handler_esc_intr_timeout_vseq
+    }
+
+    {
+      name: alert_handler_esc_alert_accum
+      uvm_test_seq: alert_handler_esc_alert_accum_vseq
+    }
+
+    {
+      name: alert_handler_sig_int_fail
+      uvm_test_seq: alert_handler_sig_int_fail_vseq
+    }
+
+    {
+      name: alert_handler_entropy
+      uvm_test_seq: alert_handler_entropy_vseq
+      run_opts: ["+test_timeout_ns=20_000_000_000"]
+    }
+    {
+      name: alert_handler_stress_all
+      run_opts: ["+test_timeout_ns=25_000_000_000"]
+    }
+  ]
+
+  // List of regressions.
+  regressions: [
+    {
+      name: sanity
+      tests: ["alert_handler_sanity"]
     }
   ]
 }

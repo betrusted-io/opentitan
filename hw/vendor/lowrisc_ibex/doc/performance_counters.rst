@@ -41,6 +41,10 @@ The following events can be monitored using the performance counters of Ibex.
 +--------------+------------------+---------------------------------------------------------+
 |           10 | NumInstrRetC     | Number of compressed instructions retired               |
 +--------------+------------------+---------------------------------------------------------+
+|           11 | NumCyclesMulWait | Cycles waiting for multiply to complete                 |
++--------------+------------------+---------------------------------------------------------+
+|           12 | NumCyclesDivWait | Cycles waiting for divide to complete                   |
++--------------+------------------+---------------------------------------------------------+
 
 The event selector CSRs ``mhpmevent3`` - ``mhpmevent31`` define which of these events are counted by the event counters ``mhpmcounter3(h)`` - ``mhpmcounter31(h)``.
 If a specific bit in an event selector CSR is set to 1, this means that events with this ID are being counted by the counter associated with that selector CSR.
@@ -99,6 +103,10 @@ The association of events with the ``mphmcounter`` registers is hardwired as lis
 +----------------------+----------------+--------------+------------------+
 | ``mhpmcounter10(h)`` | 0xB0A (0xB8A)  |           10 | NumInstrRetC     |
 +----------------------+----------------+--------------+------------------+
+| ``mhpmcounter11(h)`` | 0xB0B (0xB8B)  |           11 | NumCyclesMulWait |
++----------------------+----------------+--------------+------------------+
+| ``mhpmcounter12(h)`` | 0xB0C (0xB8C)  |           12 | NumCyclesDivWait |
++----------------------+----------------+--------------+------------------+
 
 Similarly, the event selector CSRs are hardwired as follows.
 The remaining event selector CSRs are tied to 0, i.e., no events are counted by the corresponding counters.
@@ -122,3 +130,17 @@ The remaining event selector CSRs are tied to 0, i.e., no events are counted by 
 +----------------------+-------------+-------------+--------------+
 | ``mhpmevent10(h)``   | 0x32A       | 0x0000_0400 |           10 |
 +----------------------+-------------+-------------+--------------+
+
+FPGA Targets
+------------
+
+For FPGA targets the performance counters constitute a particularily large structure.
+Implementing the maximum 29 event counters 32, 48 and 64 bit wide results in relative logic utilizations of the core of 100%, 111% and 129% respectively.
+The relative numbers of flip-flops are 100%, 125% and 150%.
+It is recommended to implement event counters of 32 bit width where possible.
+
+For Xilinx FPGA devices featuring the `DSP48E1` DSP slice or similar, counter logic can be absorbed into the DSP slice for widths up to 48 bits.
+The resulting relative logic utilizations with respect to the non-DSP 32 bit counter implementation are 83% and 89% respectively for 32 and 48 bit DSP counters.
+This comes at the expense of 1 DSP slice per counter.
+For 32 bit counters only, the corresponding flip-flops can be incorporated into the DSP's output pipeline register, resulting in a reduction of the number of flip-flops to 50%.
+In order to infer DSP slices for performance counters, define the preprocessor variable ``FPGA_XILINX``.

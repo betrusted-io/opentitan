@@ -31,13 +31,16 @@ riscv_instr_name_t unsupported_instr[];
 
 // ISA supported by the processor
 riscv_instr_group_t supported_isa[$] = {RV32I, RV32M, RV64I, RV64M, RV32C, RV64C, RV32A, RV64A,
-                                        RV32F, RV64F, RV32D, RV64D};
+                                        RV32F, RV64F, RV32D, RV64D, RV32X};
 // Interrupt mode support
 mtvec_mode_t supported_interrupt_mode[$] = {DIRECT, VECTORED};
 
 // The number of interrupt vectors to be generated, only used if VECTORED interrupt mode is
 // supported
 int max_interrupt_vector_num = 16;
+
+// Physical memory protection support
+bit support_pmp = 0;
 
 // Debug mode support
 bit support_debug_mode = 0;
@@ -57,6 +60,9 @@ parameter int VLEN = 512;
 parameter int ELEN = 64;
 parameter int SLEN = 64;
 
+// Number of harts
+parameter int NUM_HARTS = 1;
+
 // ----------------------------------------------------------------------------
 // Previleged CSR implementation
 // ----------------------------------------------------------------------------
@@ -65,7 +71,7 @@ parameter int SLEN = 64;
 `ifdef DSIM
 privileged_reg_t implemented_csr[] = {
 `else
-parameter privileged_reg_t implemented_csr[] = {
+const privileged_reg_t implemented_csr[] = {
 `endif
     // User mode CSR
     USTATUS,    // User status
@@ -117,7 +123,7 @@ parameter privileged_reg_t implemented_csr[] = {
 `ifdef DSIM
 interrupt_cause_t implemented_interrupt[] = {
 `else
-parameter interrupt_cause_t implemented_interrupt[] = {
+const interrupt_cause_t implemented_interrupt[] = {
 `endif
     U_SOFTWARE_INTR,
     S_SOFTWARE_INTR,
@@ -133,7 +139,7 @@ parameter interrupt_cause_t implemented_interrupt[] = {
 `ifdef DSIM
 exception_cause_t implemented_exception[] = {
 `else
-parameter exception_cause_t implemented_exception[] = {
+const exception_cause_t implemented_exception[] = {
 `endif
     INSTRUCTION_ACCESS_FAULT,
     ILLEGAL_INSTRUCTION,

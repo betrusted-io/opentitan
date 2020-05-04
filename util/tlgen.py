@@ -8,11 +8,9 @@ r""" TileLink-Uncached Lightweight Xbar generator
 import argparse
 import logging as log
 import sys
-from pathlib import Path, PurePath
+from pathlib import Path
 
 import hjson
-import mako
-import pkg_resources
 
 import tlgen
 
@@ -34,6 +32,11 @@ def main():
         help=
         "Target directory. tlgen needs 'rtl/' and 'dv/' directory under the target dir"
     )
+    parser.add_argument('--ip-path',
+                        default="",
+                        help='''
+        Additional path to generated rtl/ or dv/ folders: outdir/ip_path/rtl
+        Only needed when there are multiple xbar in outdir''')
     parser.add_argument('--verbose', '-v', action='store_true', help='Verbose')
 
     args = parser.parse_args()
@@ -66,6 +69,7 @@ def main():
     log.info(obj)
 
     xbar = tlgen.validate(obj)
+    xbar.ip_path = args.ip_path
 
     if not tlgen.elaborate(xbar):
         log.error("Elaboration failed." + repr(xbar))
@@ -73,9 +77,9 @@ def main():
     # Generate
     out_rtl, out_pkg, out_core = tlgen.generate(xbar)
 
-    rtl_path = Path(args.outdir) / 'rtl/autogen'
+    rtl_path = Path(args.outdir) / args.ip_path / 'rtl/autogen'
     rtl_path.mkdir(parents=True, exist_ok=True)
-    dv_path = Path(args.outdir) / 'dv/autogen'
+    dv_path = Path(args.outdir) / args.ip_path / 'dv/autogen'
     dv_path.mkdir(parents=True, exist_ok=True)
 
     rtl_filename = "xbar_%s.sv" % (xbar.name)

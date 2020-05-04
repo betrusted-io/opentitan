@@ -35,7 +35,7 @@ TODO: briefly discuss key architectural decisions, and how we came to the conclu
 Designs within the OpenTitan project come in a variety of completion status levels.
 Some designs are "tapeout ready" while others are still a work in progress.
 Understanding the status of a design is important to gauge the confidence in its advertised feature set.
-To that end, we've designated a spectrum of design stages in the [OpenTitan Hardware Development Stages]({{< relref "doc/project/hw_stages.md" >}}) document.
+To that end, we've designated a spectrum of design stages in the [OpenTitan Hardware Development Stages]({{< relref "doc/project/development_stages.md" >}}) document.
 This document defines the design stages and references where one can find the current status of each of the designs in the repository.
 
 ## Documentation
@@ -69,17 +69,23 @@ Capturing fast and efficient feedback on syntactic and semantic (as well as styl
 Running lint is especially useful with SystemVerilog, a weakly-typed language, unlike more modern hardware description languages.
 Running lint is faster than running a simulation.
 
-Currently, due to the proprietary nature of tool collateral, all linting activity is done offline and reported back to designers.
-The project will standardize on a particular linting tool, and results will be shared in some form through continuous integration build results, published tool outputs, pre-submit checks, and/or linting summaries of tool output (TODO: publication details).
-For developers of design IP, the recommendation is to run their code through whatever linting tool they have available at their disposal before creating a design Pull Request, then work with the maintainers of the linting sign-off methodology to close linting errors.
-(TODO: decide on available pre-submit linting options).
+We have standardized on the [AscentLint](https://www.realintent.com/rtl-linting-ascent-lint/) tool from RealIntent for this task due to its fast run-times and comprehensive set of rules that provide concise error and warning messages.
+
+The lint flow leverages a new lint rule policy named _"lowRISC Lint Rules"_ that has been tailored towards our [Verilog Style Guide](https://github.com/lowRISC/style-guides/blob/master/VerilogCodingStyle.md).
+The lint flow run scripts and waiver files are available in the GitHub repository of this project, but due to the proprietary nature of the lint rules and their configuration, the _"lowRISC Lint Rules"_ lint policy file can not be publicly provided.
+However, the _"lowRISC Lint Rules"_ are available as part of the default policies in AscentLint release 2019.A.p3 or newer (as `LRLR-v1.0.policy`).
+This enables designers that have access to this tool to run the lint flow provided locally on their premises.
+
+For developers of design IP, the recommendation is to set up the AscentLint flow for their IP as described in the [Lint Flow README]({{< relref "hw/lint/doc/README.md" >}}), and use the flow locally to close the errors and warnings.
 Linting errors and warnings can be closed by fixing the code in question (preferred), or waiving the error.
+These waivers have to be reviewed as part of the Pull Request review process.
 
-Due to the proprietary nature of this particular linting tool, content towards running the tool can not be checked in in this open source repository.
-In the current state of the project, all lint scripts, policy files, and waivers are **not** provided, but are being kept privately until we can suggest a workable open source solution.
-When this methodology is finalized the details will be given here. (TODO)
+For other developers that do not have access to this tool, the recommendation is to run their code through whatever linting tool they have available at their disposal before creating a design Pull Request (e.g. the open source Verilator tool).
+Once the Pull Request has been merged, these developers can then work with the maintainers to enable sign-off linting on their design.
 
-Goals for linting closure per design milestone are given in the [OpenTitan Development Stages]({{< relref "doc/project/hw_stages" >}}) document.
+Note that all designs with enabled AscentLint targets will be run through the tool in eight-hour intervals and the results are published as part of the tool dashboards on the [hardware IP overview page](https://docs.opentitan.org/hw), enabling designers to close the lint errors and warnings even if they cannot run the sign-off tool locally.
+
+Goals for linting closure per design milestone are given in the [OpenTitan Development Stages]({{< relref "doc/project/development_stages" >}}) document.
 
 ## Assertion Methodology
 
@@ -166,3 +172,32 @@ The process for getting started with a design involves many steps, including get
 These are discussed in the [Getting Started with a Design]({{< relref "getting_started_design.md" >}}) document.
 
 ## FPGA vs Silicon
+
+One output of the OpenTitan project will be silicon instantiations of hardware functionality described in this open source repository.
+The RTL repository defines design functionality at a level satisfactory to prove the hardware and software functionality in an FPGA (see [user guides]({{< relref "doc/ug" >}})).
+That level is so-called "tapeout ready".
+Once the project reaches that milestone, the team will work with a vendor or vendors to ensure a trustworthy, industry-quality, fully functional OpenTitan chip is manufactured.
+
+It is important that any IP that *can* be open *is* open to ensure maximal trustworthiness and transparency of the final devices.
+
+To that end, OpenTitan will define compliance collateral that ensures correctness - that the FPGA and the eventual silicon work the same.
+Due to fundamental economic and technical limitations, there may, and likely will, be differences between these incarnations.
+Some examples include the following:
+
+* Silicon versions by definition use different technologies for fundamental vendor collateral, including memories, analog designs, pads, and standard cells.
+* Some of the silicon collateral is beyond the so-called "foundry boundry" and not available for open sourcing.
+
+Some IP blocks will undergo hardening of designs to protect them against physical attack to meet security and certification requirements.
+Some of this hardening, for instance in fuses, may be of necessity proprietary.
+These changes will not impact the functionality of the design, but are described in processes unique to an ASIC flow vs. the emulated flow of an FPGA.
+
+Even with these differences, the overriding objective is compliance equivalence between the FPGA and silicon versions.
+This may require instantiation-specific differences in the software implementation of the compliance suite.
+
+Consider the embedded flash macro.
+This design is highly dependent upon the silicon technology node.
+In the open source repository, the embedded flash macro is emulated by a model that approximates the timing one would typically find in silicon.
+It lacks the myriad timing knobs and configuration points required to control the final flash block.
+This necessitates that the compliance suite will have initialization sections for flash that differ between FPGA and silicon.
+
+We consider this demonstration of "security equivalence" to be an open, unsolved problem and committed to clearly delimiting any differences in the compliance suite implementation.

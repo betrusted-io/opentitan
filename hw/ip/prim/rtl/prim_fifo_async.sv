@@ -4,6 +4,8 @@
 //
 // Generic asynchronous fifo for use in a variety of devices.
 
+`include "prim_assert.sv"
+
 module prim_fifo_async #(
   parameter  int unsigned Width  = 16,
   parameter  int unsigned Depth  = 3,
@@ -173,7 +175,7 @@ module prim_fifo_async #(
   // gray code conversion functions.  algorithm walks up from 0..N-1
   // then flips the upper bit and walks down from N-1 to 0.
 
-  function automatic [PTR_WIDTH-1:0] dec2gray(input [PTR_WIDTH-1:0] decval);
+  function automatic [PTR_WIDTH-1:0] dec2gray(input logic [PTR_WIDTH-1:0] decval);
     logic [PTR_WIDTH-1:0] decval_sub;
     logic [PTR_WIDTH-2:0] decval_in;
     logic                 unused_decval_msb;
@@ -187,7 +189,7 @@ module prim_fifo_async #(
                 {1'b0,decval_in[PTR_WIDTH-2:1]} ^ decval_in[PTR_WIDTH-2:0]};
   endfunction
 
-  function automatic [PTR_WIDTH-1:0] gray2dec(input [PTR_WIDTH-1:0] grayval);
+  function automatic [PTR_WIDTH-1:0] gray2dec(input logic [PTR_WIDTH-1:0] grayval);
     logic [PTR_WIDTH-2:0] dec_tmp, dec_tmp_sub;
     logic                 unused_decsub_msb;
 

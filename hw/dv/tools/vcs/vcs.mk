@@ -1,11 +1,8 @@
-####################################################################################################
-## Copyright lowRISC contributors.                                                                ##
-## Licensed under the Apache License, Version 2.0, see LICENSE for details.                       ##
-## SPDX-License-Identifier: Apache-2.0                                                            ##
-####################################################################################################
-## Makefile option groups that can be enabled by test Makefile / command line.                    ##
-## These are generic set of option groups that apply to all testbenches.                          ##
-####################################################################################################
+# Copyright lowRISC contributors.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+# Makefile option groups that can be enabled by test Makefile / command line.
+# These are generic set of option groups that apply to all testbenches.
 # Simulator too specific options
 # Mandatory items to set (these are used by rules.mk):
 # SIMCC       - Simulator compiler used to build / elaborate the bench
@@ -29,6 +26,14 @@ BUILD_OPTS  += +warn=noUII-L
 BUILD_OPTS  += +warn=SV-NFIVC
 # option below is required for $error / $fatal system calls
 BUILD_OPTS  += -assert svaext
+# Force DPI-C compilation in C99 mode
+BUILD_OPTS  += -CFLAGS "--std=c99"
+# Without this magic LDFLAGS argument below, we get compile time errors with
+# VCS on Google Linux machines that look like this:
+# .../libvcsnew.so: undefined reference to `snpsReallocFunc'
+# .../libvcsnew.so: undefined reference to `snpsCheckStrdupFunc'
+# .../libvcsnew.so: undefined reference to `snpsGetMemBytes'
+BUILD_OPTS  += -LDFLAGS "-Wl,--no-as-needed"
 
 # set standard run options
 RUN_OPTS    += -licqueue

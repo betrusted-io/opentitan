@@ -4,8 +4,11 @@
 
 {
     name:               "aes",
-    version:            "0.5",
+    design_spec:        "hw/ip/aes/doc",
+    dv_plan:            "hw/ip/aes/doc/dv_plan",
+    hw_checklist:       "hw/ip/aes/doc/checklist",
+    version:            "0.6",
     life_stage:         "L1",
     design_stage:       "D2",
-    verification_stage: "V0",
+    verification_stage: "V1",
 }

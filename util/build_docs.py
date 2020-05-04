@@ -18,6 +18,7 @@ import platform
 import re
 import shutil
 import subprocess
+import textwrap
 from pathlib import Path
 
 import hjson
@@ -27,7 +28,7 @@ import reggen.gen_cfg_html as gen_cfg_html
 import reggen.gen_html as gen_html
 import reggen.validate as validate
 import reggen.gen_selfdoc as reggen_selfdoc
-import testplanner.testplan_utils as testplan_utils
+import dvsim.testplanner.testplan_utils as testplan_utils
 import tlgen
 
 USAGE = """
@@ -35,7 +36,7 @@ USAGE = """
 """
 
 # Version of hugo extended to be used to build the docs
-HUGO_EXTENDED_VERSION = "0.59.0"
+HUGO_EXTENDED_VERSION = "0.60.0"
 
 # Configurations
 # TODO: Move to config.yaml
@@ -48,15 +49,16 @@ config = {
     # Pre-generate register and hwcfg fragments from these files.
     "hardware_definitions": [
         "hw/ip/aes/data/aes.hjson",
-        "hw/ip/alert_handler/data/alert_handler.hjson",
+        "hw/top_earlgrey/ip/alert_handler/data/autogen/alert_handler.hjson",
+        "hw/ip/entropy_src/data/entropy_src.hjson",
         "hw/ip/flash_ctrl/data/flash_ctrl.hjson",
         "hw/ip/gpio/data/gpio.hjson",
         "hw/ip/hmac/data/hmac.hjson",
         "hw/ip/i2c/data/i2c.hjson",
         "hw/ip/nmi_gen/data/nmi_gen.hjson",
         "hw/ip/padctrl/data/padctrl.hjson",
-        "hw/ip/pinmux/data/pinmux.hjson",
-        "hw/ip/rv_plic/data/rv_plic.hjson",
+        "hw/top_earlgrey/ip/pinmux/data/autogen/pinmux.hjson",
+        "hw/top_earlgrey/ip/rv_plic/data/autogen/rv_plic.hjson",
         "hw/ip/rv_timer/data/rv_timer.hjson",
         "hw/ip/spi_device/data/spi_device.hjson",
         "hw/ip/uart/data/uart.hjson",
@@ -76,13 +78,15 @@ config = {
         "hw/ip/gpio/data/gpio_testplan.hjson",
         "hw/ip/hmac/data/hmac_testplan.hjson",
         "hw/ip/i2c/data/i2c_testplan.hjson",
+        "hw/ip/pinmux/data/pinmux_fpv_testplan.hjson",
         "hw/ip/rv_plic/data/rv_plic_fpv_testplan.hjson",
         "hw/ip/rv_timer/data/rv_timer_testplan.hjson",
         "hw/ip/spi_device/data/spi_device_testplan.hjson",
         "hw/ip/uart/data/uart_testplan.hjson",
+        "hw/ip/usbdev/data/usbdev_testplan.hjson",
         "hw/ip/tlul/data/tlul_testplan.hjson",
         "hw/top_earlgrey/data/standalone_sw_testplan.hjson",
-        "util/testplanner/examples/foo_testplan.hjson",
+        "util/dvsim/testplanner/examples/foo_testplan.hjson",
     ],
 
     # Pre-generated utility selfdoc
@@ -164,6 +168,52 @@ def generate_selfdocs():
             elif tool == "tlgen":
                 fout.write(tlgen.selfdoc(heading=3, cmd='tlgen.py --doc'))
 
+def generate_apt_reqs():
+    """Generate an apt-get command line invocation from apt-requirements.txt
+
+    This will be saved in outdir-generated/apt_cmd.txt
+    """
+    # Read the apt-requirements.txt
+    apt_requirements = []
+    requirements_file = open(str(SRCTREE_TOP.joinpath("apt-requirements.txt")))
+    for package_line in requirements_file.readlines():
+        # Ignore everything after `#` on each line, and strip whitespace
+        package = package_line.split('#', 1)[0].strip()
+        if package:
+            # only add non-empty lines to packages
+            apt_requirements.append(package)
+
+    apt_cmd = "$ sudo apt-get install " + " ".join(apt_requirements)
+    apt_cmd_lines = textwrap.wrap(apt_cmd,
+                                  width=78,
+                                  replace_whitespace=True,
+                                  subsequent_indent='    ')
+    # Newlines need to be escaped
+    apt_cmd = " \\\n".join(apt_cmd_lines)
+
+    # And then to write the generated string directly to the file.
+    apt_cmd_path = config["outdir-generated"].joinpath('apt_cmd.txt')
+    apt_cmd_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(str(apt_cmd_path), mode='w') as fout:
+        fout.write(apt_cmd)
+
+def generate_tool_versions():
+    """Generate an tool version number requirement from tool_requirements.py
+
+    The version number per tool will be saved in outdir-generated/version_$TOOL_NAME.txt
+    """
+
+    # Populate __TOOL_REQUIREMENTS__
+    requirements_file = str(SRCTREE_TOP.joinpath("tool_requirements.py"))
+    exec(open(requirements_file).read(), globals())
+
+    # And then write a version file for every tool.
+    for tool in __TOOL_REQUIREMENTS__:
+        version_path = config["outdir-generated"].joinpath('version_' + tool + '.txt')
+        version_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(str(version_path), mode='w') as fout:
+            fout.write(__TOOL_REQUIREMENTS__[tool])
+
 
 def is_hugo_extended():
     args = ["hugo", "version"]
@@ -175,7 +225,7 @@ def is_hugo_extended():
 
     # Hugo version string example:
     # Hugo Static Site Generator v0.59.0-1DD0C69C/extended linux/amd64 BuildDate: 2019-10-21T09:45:38Z
-    return bool(re.search("v\d+\.\d+\.\d+-.*/extended", process.stdout))
+    return bool(re.search("v\d+\.\d+\.\d+.*/extended", process.stdout))
 
 
 def install_hugo(install_dir):
@@ -252,6 +302,8 @@ def main():
     generate_dashboards()
     generate_testplans()
     generate_selfdocs()
+    generate_apt_reqs()
+    generate_tool_versions()
 
     hugo_localinstall_dir = SRCTREE_TOP / 'build' / 'docs-hugo'
     os.environ["PATH"] += os.pathsep + str(hugo_localinstall_dir)

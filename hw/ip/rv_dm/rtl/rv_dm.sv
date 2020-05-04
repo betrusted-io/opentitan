@@ -10,6 +10,8 @@
 // https://github.com/pulp-platform/riscv-dbg to match the needs of
 // the TL-UL-based lowRISC chip design.
 
+`include "prim_assert.sv"
+
 module rv_dm #(
   parameter int                 NrHarts = 1,
   parameter logic [31:0]        IdcodeValue = 32'h 0000_0001
@@ -45,7 +47,7 @@ module rv_dm #(
   // Currently only 32 bit busses are supported by our TL-UL IP
   localparam int BusWidth = 32;
   // all harts have contiguous IDs
-  localparam SelectableHarts = {NrHarts{1'b1}};
+  localparam logic [NrHarts-1:0] SelectableHarts = {NrHarts{1'b1}};
 
   // Debug CSRs
   dm::hartinfo_t [NrHarts-1:0]      hartinfo;
@@ -161,6 +163,7 @@ module rv_dm #(
   logic                   master_gnt;
   logic                   master_r_valid;
   logic   [BusWidth-1:0]  master_r_rdata;
+  logic                   master_r_err;
 
   dm_sba #(
     .BusWidth(BusWidth)
@@ -194,8 +197,7 @@ module rv_dm #(
   );
 
   tlul_adapter_host #(
-    .AW(BusWidth),
-    .DW(BusWidth)
+    .MAX_REQS(1)
   ) tl_adapter_host_sba (
     .clk_i,
     .rst_ni,
@@ -205,14 +207,17 @@ module rv_dm #(
     .we_i         (master_we),
     .wdata_i      (master_wdata),
     .be_i         (master_be),
-    .size_i       (sbaccess[1:0]),
     .valid_o      (master_r_valid),
     .rdata_o      (master_r_rdata),
+    .err_o        (master_r_err),
     .tl_o         (tl_h_o),
     .tl_i         (tl_h_i)
   );
 
-  localparam AddressWidthWords = BusWidth - $clog2(BusWidth/8);
+  // DBG doesn't handle error responses so raise assertion if we see one
+  `ASSERT(dbgNoErrorResponse, master_r_valid |-> !master_r_err)
+
+  localparam int unsigned AddressWidthWords = BusWidth - $clog2(BusWidth/8);
 
   logic                         req;
   logic                         we;
@@ -262,6 +267,8 @@ module rv_dm #(
     .rdata_o                 ( rdata                 )
   );
 
+  // Bound-in DPI module replaces the TAP
+`ifndef DMIDirectTAP
   // JTAG TAP
   dmi_jtag #(
     .IdcodeValue    (IdcodeValue)
@@ -287,6 +294,7 @@ module rv_dm #(
     .td_o,
     .tdo_oe_o
   );
+`endif
 
   tlul_adapter_sram #(
     .SramAw(AddressWidthWords),

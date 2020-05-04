@@ -17,7 +17,7 @@ GROUP(-lgcc)
 __DYNAMIC = 0;
 
 MEMORY {
-  rom(rx)   : ORIGIN = 0x00008000, LENGTH = 0x2000
+  rom(rx)   : ORIGIN = 0x00008000, LENGTH = 0x4000
   ram(w)    : ORIGIN = 0x10000000, LENGTH = 0x10000
   flash(rx) : ORIGIN = 0x20000000, LENGTH = 0x100000
 }
@@ -28,9 +28,12 @@ MEMORY {
  */
 _boot_address = ORIGIN(rom);
 
+/* Reserving 32 bytes at the top of the RAM for test utils. */
+_test_reserved_size = 0x20;
 _heap_size = 0xe000;
-_stack_size = 0x2000;
+_stack_size = 0x2000 - _test_reserved_size;
 _stack_start = ORIGIN(ram) + _heap_size + _stack_size;
+_stack_end   = ORIGIN(ram) + _heap_size;
 _flash_start = ORIGIN(flash);
 
 /**
@@ -51,7 +54,7 @@ _chip_info_start = ORIGIN(rom) + LENGTH(rom) - _chip_info_size;
  */
 SECTIONS {
   /**
-   * Ibex interrupt vector. See irq_vector.S for more information. 
+   * Ibex interrupt vector. See irq_vector.S for more information.
    *
    * This has to be set up at the boot address, so that execution jumps to the
    * reset handler correctly.
@@ -82,27 +85,41 @@ SECTIONS {
    * strings.
    */
   .rodata : ALIGN(4) {
+    /* Small read-only data comes before regular read-only data for the same
+     * reasons as in the data section */
+    *(.srodata)
+    *(.srodata.*)
     *(.rodata)
     *(.rodata.*)
   } > rom
 
   /**
-   * "Intitial data" section, the initial values of the mutable data section 
+   * "Intitial data" section, the initial values of the mutable data section
    * initialized at runtime.
-   */ 
+   */
   .idata : ALIGN(4) {
     _data_init_start = .;
   } > rom
 
-  /** 
+  /**
    * Standard mutable data section, at the bottom of RAM. This will be
    * initialized from the .idata section at runtime by the CRT.
-   */ 
+   */
   .data ORIGIN(ram): AT(_data_init_start) ALIGN(4) {
     _data_start = .;
+    __global_pointer$ = . + 2048;
+
+    /* Small data should come before larger data. This helps to ensure small
+     * globals are within 2048 bytes of the value of `gp`, making their accesses
+     * hopefully only take one instruction. */
+    *(.sdata)
+    *(.sdata.*)
+
+    /* Other data will likely need multiple instructions to load, so we're less
+     * concerned about address materialisation taking more than one instruction.
+     */
     *(.data)
     *(.data.*)
-    *(.sdata)
     _data_end = .;
   } > ram
 
@@ -118,10 +135,12 @@ SECTIONS {
    */
   .bss : ALIGN(4) {
     _bss_start = .;
-    *(.bss)
-    *(.bss.*)
+    /* Small BSS comes before regular BSS for the same reasons as in the data
+     * section */
     *(.sbss)
     *(.sbss.*)
+    *(.bss)
+    *(.bss.*)
     *(COMMON)
     _bss_end = .;
   } > ram
@@ -138,5 +157,25 @@ SECTIONS {
    */
   .stabstr 0x0 (NOLOAD): {
     [.stabstr]
+  }
+
+  /**
+   * The following sections are used by DV to implement logging in an
+   * alternate way, which enables simulation speed up by completely avoiding
+   * any string format processing or even the actual transmission of log data
+   * to a real peripheral.
+   *
+   * These sections are marked as dummy so that they can still be extracted
+   * using readelf or similar utilities. As such, the content in these sections
+   * is not relevant for the actual SW code and can be safely discarded.
+   */
+
+  /**
+   * The following section contains log fields constructed from the logs using
+   * the log_fields_t struct defined in sw/device/lib/base/log.h. The size of
+   * each log field is fixed - 20 bytes, which is used as the delimiter.
+   */
+  .logs.fields 0x0 (DSECT): {
+    *(.logs.fields)
   }
 }

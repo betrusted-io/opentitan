@@ -12,8 +12,8 @@ title: "RV_PLIC DV Plan"
   * Verify TileLink device protocol compliance with a FPV based testbench
 
 ## Current status
-* [Design & verification stage]({{< relref "doc/project/hw_dashboard" >}})
-  * [HW development stages]({{< relref "doc/project/hw_stages.md" >}})
+* [Design & verification stage]({{< relref "hw" >}})
+  * [HW development stages]({{< relref "doc/project/development_stages" >}})
 * FPV dashboard (link TBD)
 
 ## Design features
@@ -28,14 +28,15 @@ architecture]({{< relref "hw/formal/README.md" >}}).
 ![Block diagram](fpv.svg)
 
 #### TLUL assertions
-* The `../fpv/tb/rv_plic_bind.sv` binds the `tlul_assert` [assertions]({{< relref "hw/ip/tlul/doc/TlulProtocolChecker.md" >}})
-  to rv_plic to ensure TileLink interface protocol compliance
-* TODO: Plan to implement csr assertions under `../fpv/vip/` to assert the
-  TileLink writes and reads correct CSRs
+* The `hw/rv_plic/fpv/tb/rv_plic_bind.sv` binds the `tlul_assert` [assertions]({{< relref "hw/ip/tlul/doc/TlulProtocolChecker.md" >}})
+  to rv_plic to ensure TileLink interface protocol compliance.
+* The `hw/rv_plic/fpv/tb/rv_plic_bind.sv` also binds the `rv_plic_csr_assert_fpv`
+  under `hw/rv_plic/fpv/vip/` to check if TileLink writes and reads correct
+  CSRs.
 
 #### RV_PLIC assertions
-The `../fpv/tb/rv_plic_bind.sv` binds the `rv_plic_assert` under
-`../fpv/vip/rv_plic_assert.sv`. The assertion file ensures RV_PLIC's outputs
+The `hw/rv_plic/fpv/tb/rv_plic_bind.sv` binds the `rv_plic_assert` under
+`hw/rv_plic/fpv/vip/rv_plic_assert.sv`. The assertion file ensures RV_PLIC's outputs
 (`irq_o` and `irq_id_o`) and important signals (`ip`) are being asserted.
 
 ##### Symbolic variables

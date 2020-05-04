@@ -1,13 +1,10 @@
-####################################################################################################
-## Copyright lowRISC contributors.                                                                ##
-## Licensed under the Apache License, Version 2.0, see LICENSE for details.                       ##
-## SPDX-License-Identifier: Apache-2.0                                                            ##
-####################################################################################################
-## Makefile option groups that can be enabled by test Makefile / command line.                    ##
-## These are generic set of option groups that apply to all testbenches.                          ##
-## These are meant to be simulator agnostic                                                       ##
-## Please add tool specific options with appropriate ifeq's                                       ##
-####################################################################################################
+# Copyright lowRISC contributors.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+# Makefile option groups that can be enabled by test Makefile / command line.
+# These are generic set of option groups that apply to all testbenches.
+# These are meant to be simulator agnostic
+# Please add tool specific options with appropriate ifeq's
 
 TEST_PREFIX     ?= ${DUT_TOP}
 
@@ -61,7 +58,8 @@ endif
 ifeq (${TEST_NAME},${TEST_PREFIX}_stress_all_with_rand_reset)
   UVM_TEST_SEQ   = ${TEST_PREFIX}_common_vseq
   RUN_OPTS      += +run_stress_all_with_rand_reset
-  RUN_OPTS      += +test_timeout_ns=10_000_000_000
+  // 10ms
+  RUN_OPTS      += +test_timeout_ns=10000000000
   RUN_OPTS      += +stress_seq=${TEST_PREFIX}_stress_all_vseq
 endif
 

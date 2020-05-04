@@ -23,25 +23,19 @@ Unless otherwise noted, everything in the repository is covered by the Apache Li
 
 ## Documentation Sections
 
-* [Project]({{< relref "doc/project" >}})
-  * How the OpenTitan project is organized
-  * Progress tracking
-* [User Guides]({{< relref "doc/ug" >}})
-  * How to get started with the repo
-  * How to emulate on an FPGA
-  * How hardware design is done in OpenTitan
-  * How verification is done in OpenTitan
-* [Reference Manuals]({{< relref "doc/rm" >}})
-  * Defining comportable IP peripherals
-  * Coding style guides for Verilog, Python, Hjson, C/C++ and Markdown
-  * OpenTitan tools
-* [Hardware Specifications]({{< relref "hw" >}})
-  * Top-level SoC
-  * Ibex processor core
-  * Comportable IP blocks
-* [Security Docs]({{< relref "doc/security" >}})
-  * Overview
-  * Use cases
-  * Logical security documents
+* [General]({{< relref "doc" >}})
+  * Project
+  * User Guides
+  * Reference Manuals
+  * Security
+* [Hardware Dashboard]({{< relref "hw" >}})
+  * Design specifications
+  * Verification plans
+  * Results of tool-flows
+  * Comportable IPs
+  * Processor cores
+  * Top level designs
+* [Software]({{< relref "sw" >}})
+  * READMEs of OpenTitan software
 * [Tools]({{< relref "util" >}})
   * READMEs of OpenTitan tools

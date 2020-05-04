@@ -7,6 +7,8 @@
 //      If SRAM interface requests more than MaxOutstanding cap, it generates
 //      error in simulation but not in Silicon.
 
+`include "prim_assert.sv"
+
 module sram2tlul #(
   parameter int                        SramAw = 12,
   parameter int                        SramDw = 32,
@@ -30,9 +32,7 @@ module sram2tlul #(
 
   import tlul_pkg::*;
 
-  `ifndef SYNTHESIS
-  if (SramDw != top_pkg::TL_DW) $fatal("SRAM_DW should be same as TL-UL DW");
-  `endif
+  `ASSERT_INIT(wrongSramDw, SramDw == top_pkg::TL_DW)
 
   localparam int unsigned SRAM_DWB = $clog2(SramDw/8);
 
@@ -55,6 +55,6 @@ module sram2tlul #(
 
   // below assertion fails when TL-UL doesn't accept request in a cycle,
   // which is currently not supported by sram2tlul
-  `ASSERT(validNotReady, tl_o.a_valid |-> tl_i.a_ready, clk_i, !rst_ni)
+  `ASSERT(validNotReady, tl_o.a_valid |-> tl_i.a_ready)
 
 endmodule

@@ -6,6 +6,8 @@
 // Note that only the mandatory pad attributes are tested here.
 
 
+`include "prim_assert.sv"
+
 `ifndef PRIM_DEFAULT_IMPL
   `define PRIM_DEFAULT_IMPL prim_pkg::ImplGeneric
 `endif
@@ -16,7 +18,7 @@ module padctrl_assert_fpv #(
   input                                       clk_i,
   input                                       rst_ni,
   // Bus Interface (device)
-  input  tlul_pkg::tl_h2d_t                   tl_i,
+  input tlul_pkg::tl_h2d_t                    tl_i,
   input tlul_pkg::tl_d2h_t                    tl_o,
   // pad attributes to chip level instance
   input logic[padctrl_reg_pkg::NMioPads-1:0]
@@ -40,19 +42,23 @@ module padctrl_assert_fpv #(
 
   if (Impl == ImplGeneric) begin : gen_mio_generic
     `ASSERT(MioWarl_A, padctrl.reg2hw.mio_pads[mio_sel].qe |=>
-        !(|mio_attr_o[mio_sel][padctrl_reg_pkg::AttrDw-1:6]),
-        clk_i, !rst_ni)
+        !(|mio_attr_o[mio_sel][padctrl_reg_pkg::AttrDw-1:6]))
     `ASSERT(MioAttr_A, padctrl.reg2hw.mio_pads[mio_sel].qe |=>
-      mio_attr_o[mio_sel][5:0] == $past(padctrl.reg2hw.mio_pads[mio_sel].q[5:0]),
-      clk_i, !rst_ni)
+      mio_attr_o[mio_sel][5:0] == $past(padctrl.reg2hw.mio_pads[mio_sel].q[5:0]))
+    `ASSERT(MioBackwardCheck_A, ##2 !$stable(mio_attr_o[mio_sel]) |->
+        !$stable(padctrl.reg2hw.mio_pads[mio_sel].q[5:0]) ||
+        $rose($past(padctrl.reg2hw.mio_pads[mio_sel].qe)))
+
   end else if (Impl == ImplXilinx) begin : gen_mio_xilinx
     `ASSERT(MioWarl_A, padctrl.reg2hw.mio_pads[mio_sel].qe |=>
-        !(|padctrl.mio_attr_q[mio_sel][padctrl_reg_pkg::AttrDw-1:2]),
-        clk_i, !rst_ni)
+        !(|padctrl.mio_attr_q[mio_sel][padctrl_reg_pkg::AttrDw-1:2]))
     `ASSERT(MioAttr_A, padctrl.reg2hw.mio_pads[mio_sel].qe |=>
         mio_attr_o[mio_sel][1:0] ==
-        $past(padctrl.reg2hw.mio_pads[mio_sel].q[1:0]),
-        clk_i, !rst_ni)
+        $past(padctrl.reg2hw.mio_pads[mio_sel].q[1:0]))
+    `ASSERT(MioBackwardCheck_A, ##2 !$stable(mio_attr_o[mio_sel]) |->
+        !$stable(padctrl.reg2hw.mio_pads[mio_sel].q[1:0]) ||
+        $rose($past(padctrl.reg2hw.mio_pads[mio_sel].qe)))
+
   end else begin : gen_mio_failure
     `ASSERT_INIT(UnknownImpl_A, 0)
   end
@@ -65,19 +71,23 @@ module padctrl_assert_fpv #(
   `ASSUME(NDioStable_M, ##1 $stable(dio_sel), clk_i, !rst_ni)
   if (Impl == ImplGeneric) begin : gen_dio_generic
     `ASSERT(DioWarl_A, padctrl.reg2hw.dio_pads[dio_sel].qe |=>
-        !(|dio_attr_o[dio_sel][padctrl_reg_pkg::AttrDw-1:6]),
-        clk_i, !rst_ni)
+        !(|dio_attr_o[dio_sel][padctrl_reg_pkg::AttrDw-1:6]))
     `ASSERT(DioAttr_A, padctrl.reg2hw.dio_pads[dio_sel].qe |=>
-      dio_attr_o[dio_sel][5:0] == $past(padctrl.reg2hw.dio_pads[dio_sel].q[5:0]),
-      clk_i, !rst_ni)
+      dio_attr_o[dio_sel][5:0] == $past(padctrl.reg2hw.dio_pads[dio_sel].q[5:0]))
+    `ASSERT(DioBackwardCheck_A, ##2 !$stable(dio_attr_o[dio_sel]) |->
+        !$stable(padctrl.reg2hw.dio_pads[dio_sel].q[5:0]) ||
+        $rose($past(padctrl.reg2hw.dio_pads[dio_sel].qe)))
+
   end else if (Impl == ImplXilinx) begin : gen_dio_xilinx
     `ASSERT(DioWarl_A, padctrl.reg2hw.dio_pads[dio_sel].qe |=>
-        !(|padctrl.dio_attr_q[dio_sel][5:2]),
-        clk_i, !rst_ni)
+        !(|padctrl.dio_attr_q[dio_sel][5:2]))
     `ASSERT(DioAttr_A, padctrl.reg2hw.dio_pads[dio_sel].qe |=>
         dio_attr_o[dio_sel][1:0] ==
-        $past(padctrl.reg2hw.dio_pads[dio_sel].q[1:0]),
-        clk_i, !rst_ni)
+        $past(padctrl.reg2hw.dio_pads[dio_sel].q[1:0]))
+    `ASSERT(DioBackwardCheck_A, ##2 !$stable(dio_attr_o[dio_sel]) |->
+        !$stable(padctrl.reg2hw.dio_pads[dio_sel].q[1:0]) ||
+        $rose($past(padctrl.reg2hw.dio_pads[dio_sel].qe)))
+
   end else begin : gen_dio_failure
     `ASSERT_INIT(UnknownImpl_A, 0)
   end

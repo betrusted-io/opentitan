@@ -5,6 +5,8 @@
 // Protocol checker for TL-UL ports using assertions. Supports interface-widths
 // up to 64bit.
 
+`include "prim_assert.sv"
+
 module tlul_assert #(
   parameter EndpointType = "Device" // can be either "Host" or "Device"
 ) (
@@ -19,6 +21,9 @@ module tlul_assert #(
 `ifndef VERILATOR
 `ifndef SYNTHESIS
 
+`ifdef UVM
+  import uvm_pkg::*;
+`endif
   import tlul_pkg::*;
   import top_pkg::*;
 
@@ -41,13 +46,7 @@ module tlul_assert #(
 
   pend_req_t [2**TL_AIW-1:0] pend_req;
 
-  // this interfaces allows the testbench to disable some assertions
-  // by driving the corresponding pin to 1'b0
-  wire tlul_assert_ctrl, disable_sva;
-  pins_if #(1) tlul_assert_ctrl_if(tlul_assert_ctrl);
-  // the interface may be uninitialized, in which case the assertions
-  // shall be enabled, hence the explicit check for 1'b0
-  assign disable_sva = (tlul_assert_ctrl === 1'b0);
+  bit disable_sva;
 
   logic [7:0]  a_mask, d_mask;
   logic [63:0] a_data, d_data;
@@ -63,24 +62,24 @@ module tlul_assert #(
   // use negedge clk to avoid possible race conditions
   always_ff @(negedge clk_i or negedge rst_ni) begin
     if (!rst_ni) begin
-      pend_req = '0;
+      pend_req <= '0;
     end else begin
       if (h2d.a_valid) begin
         // store each request in pend_req array (we use blocking statements below so
         // that we can handle the case where request and response for the same
         // source-ID happen in the same cycle)
         if (d2h.a_ready) begin
-          pend_req[h2d.a_source].pend    = 1;
-          pend_req[h2d.a_source].opcode  =  h2d.a_opcode;
-          pend_req[h2d.a_source].size    =  h2d.a_size;
-          pend_req[h2d.a_source].mask    =  h2d.a_mask;
+          pend_req[h2d.a_source].pend    <= 1;
+          pend_req[h2d.a_source].opcode  <= h2d.a_opcode;
+          pend_req[h2d.a_source].size    <= h2d.a_size;
+          pend_req[h2d.a_source].mask    <= h2d.a_mask;
         end
       end // h2d.a_valid
 
       if (d2h.d_valid) begin
         // update pend_req array
         if (h2d.d_ready) begin
-          pend_req[d2h.d_source].pend = 0;
+          pend_req[d2h.d_source].pend <= 0;
         end
       end //d2h.d_valid
     end
@@ -270,17 +269,25 @@ module tlul_assert #(
 
   // a_* should be known when a_valid == 1 (a_opcode and a_param are already covered above)
   // This also covers ASSERT_KNOWN of a_valid
-  `ASSERT_VALID_DATA(aKnown_A, h2d.a_valid, {h2d.a_size, h2d.a_source, h2d.a_address,
-      h2d.a_mask, h2d.a_user}, clk_i, !rst_ni)
+  `ASSERT_KNOWN_IF(aKnown_A, {h2d.a_size, h2d.a_source, h2d.a_address, h2d.a_mask, h2d.a_user},
+    h2d.a_valid)
 
   // d_* should be known when d_valid == 1 (d_opcode, d_param, d_size already covered above)
   // This also covers ASSERT_KNOWN of d_valid
-  `ASSERT_VALID_DATA(dKnown_A, d2h.d_valid, {d2h.d_source, d2h.d_sink, d2h.d_error, d2h.d_user},
-      clk_i, !rst_ni)
+  `ASSERT_KNOWN_IF(dKnown_A, {d2h.d_source, d2h.d_sink, d2h.d_error, d2h.d_user}, d2h.d_valid)
 
   //  make sure ready is not X after reset
-  `ASSERT_KNOWN(aReadyKnown_A, d2h.a_ready, clk_i, !rst_ni)
-  `ASSERT_KNOWN(dReadyKnown_A, h2d.d_ready, clk_i, !rst_ni)
+  `ASSERT_KNOWN(aReadyKnown_A, d2h.a_ready)
+  `ASSERT_KNOWN(dReadyKnown_A, h2d.d_ready)
+
+  `ifdef UVM
+    initial forever begin
+      bit tlul_assert_en;
+      uvm_config_db#(bit)::wait_modified(null, "%m", "tlul_assert_en");
+      uvm_config_db#(bit)::get(null, "%m", "tlul_assert_en", tlul_assert_en);
+      disable_sva = !tlul_assert_en;
+    end
+  `endif
 `endif
 `endif
 endmodule : tlul_assert

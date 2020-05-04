@@ -1,19 +1,12 @@
-#!/usr/bin/env python3
 # Copyright lowRISC contributors.
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
-r"""
-Classes
-"""
 
 import logging as log
 import pprint
-import re
 import sys
 
-import hjson
-
-from .utils import *
+from utils import VERBOSE
 
 
 class Modes():
@@ -26,8 +19,10 @@ class Modes():
         This is used to construct the string representation of the entire class object.
         '''
         tname = ""
-        if self.type != "": tname = self.type + "_"
-        if self.mname != "": tname += self.mname
+        if self.type != "":
+            tname = self.type + "_"
+        if self.mname != "":
+            tname += self.mname
         if log.getLogger().isEnabledFor(VERBOSE):
             return "\n<---" + tname + ":\n" + pprint.pformat(self.__dict__) + \
                    "\n--->\n"
@@ -44,7 +39,7 @@ class Modes():
         keys = mdict.keys()
         attrs = self.__dict__.keys()
 
-        if not 'name' in keys:
+        if 'name' not in keys:
             log.error("Key \"name\" missing in mode %s", mdict)
             sys.exit(1)
 
@@ -52,7 +47,8 @@ class Modes():
             log.fatal("Key \"type\" is missing or invalid")
             sys.exit(1)
 
-        if not hasattr(self, "mname"): self.mname = ""
+        if not hasattr(self, "mname"):
+            self.mname = ""
 
         for key in keys:
             if key not in attrs:
@@ -101,14 +97,15 @@ class Modes():
         if sub_modes != []:
             new_sub_modes = []
             for sub_mode in sub_modes:
-                if not self.name == sub_mode and not sub_mode in new_sub_modes:
+                if self.name != sub_mode and sub_mode not in new_sub_modes:
                     new_sub_modes.append(sub_mode)
             self.set_sub_modes(new_sub_modes)
         return True
 
     def check_conflict(self, name, attr, mode_attr_val):
         self_attr_val = getattr(self, attr)
-        if self_attr_val == mode_attr_val: return
+        if self_attr_val == mode_attr_val:
+            return
 
         default_val = None
         if type(self_attr_val) is int:
@@ -135,7 +132,8 @@ class Modes():
         def merge_sub_modes(mode, parent, objs):
             # Check if there are modes available to merge
             sub_modes = mode.get_sub_modes()
-            if sub_modes == []: return
+            if sub_modes == []:
+                return
 
             # Set parent if it is None. If not, check cyclic dependency
             if parent is None:
@@ -167,7 +165,8 @@ class Modes():
         modes_objs = []
         # create a default mode if available
         default_mode = ModeType.get_default_mode()
-        if default_mode is not None: modes_objs.append(default_mode)
+        if default_mode is not None:
+            modes_objs.append(default_mode)
 
         # Process list of raw dicts that represent the modes
         # Pass 1: Create unique set of modes by merging modes with the same name
@@ -204,7 +203,6 @@ class Modes():
         Given a mode_name in string, go through list of modes and return the mode with
         the string that matches. Thrown an error and return None if nothing was found.
         '''
-        found = False
         for mode in modes:
             if mode_name == mode.name:
                 return mode
@@ -219,7 +217,8 @@ class Modes():
             sub_mode = Modes.find_mode(mode_name, modes)
             if sub_mode is not None:
                 found_mode_objs.append(sub_mode)
-                if merge_modes is True: mode.merge_mode(sub_mode)
+                if merge_modes is True:
+                    mode.merge_mode(sub_mode)
             else:
                 log.error("Mode \"%s\" enabled within mode \"%s\" not found!",
                           mode_name, mode.name)
@@ -238,7 +237,8 @@ class BuildModes(Modes):
     def __init__(self, bdict):
         self.name = ""
         self.type = "build"
-        if not hasattr(self, "mname"): self.mname = "mode"
+        if not hasattr(self, "mname"):
+            self.mname = "mode"
         self.is_sim_mode = 0
         self.build_opts = []
         self.run_opts = []
@@ -263,7 +263,8 @@ class RunModes(Modes):
     def __init__(self, rdict):
         self.name = ""
         self.type = "run"
-        if not hasattr(self, "mname"): self.mname = "mode"
+        if not hasattr(self, "mname"):
+            self.mname = "mode"
         self.reseed = -1
         self.run_opts = []
         self.uvm_test = ""
@@ -272,6 +273,7 @@ class RunModes(Modes):
         self.en_run_modes = []
         self.sw_dir = ""
         self.sw_name = ""
+        self.sw_build_device = ""
 
         super().__init__(rdict)
         self.en_run_modes = list(set(self.en_run_modes))
@@ -295,11 +297,15 @@ class Tests(RunModes):
         "reseed": -1,
         "uvm_test": "",
         "uvm_test_seq": "",
-        "build_mode": ""
+        "build_mode": "",
+        "sw_dir": "",
+        "sw_name": "",
+        "sw_build_device": "",
     }
 
     def __init__(self, tdict):
-        if not hasattr(self, "mname"): self.mname = "test"
+        if not hasattr(self, "mname"):
+            self.mname = "test"
         super().__init__(tdict)
 
     @staticmethod
@@ -367,13 +373,6 @@ class Tests(RunModes):
                     if global_val is not None and global_val != default_val:
                         setattr(test_obj, attr, global_val)
 
-                    else:
-                        # TODO: should we even enforce this?
-                        log.error(
-                            "Required value \"%s\" for the test \"%s\" is missing",
-                            attr, test_obj.name)
-                        sys, exit(1)
-
             # Unpack the build mode for this test
             build_mode_objs = Modes.find_and_merge_modes(test_obj,
                                                          [test_obj.build_mode],
@@ -417,7 +416,8 @@ class Regressions(Modes):
     def __init__(self, regdict):
         self.name = ""
         self.type = ""
-        if not hasattr(self, "mname"): self.mname = "regression"
+        if not hasattr(self, "mname"):
+            self.mname = "regression"
         self.tests = []
         self.reseed = -1
         self.test_names = []
@@ -444,7 +444,7 @@ class Regressions(Modes):
 
             # Check for name conflicts with tests before merging
             if new_regression.name in Tests.item_names:
-                log.error("Test names and regression names are required to be unique. " + \
+                log.error("Test names and regression names are required to be unique. "
                           "The regression \"%s\" bears the same name with an existing test. ",
                           new_regression.name)
                 sys.exit(1)
@@ -488,7 +488,7 @@ class Regressions(Modes):
                 # Throw an error and exit.
                 for sim_mode_obj_sub in sim_mode_obj.en_build_modes:
                     if sim_mode_obj_sub in regression_obj.en_sim_modes:
-                        log.error("Regression \"%s\" enables sim_modes \"%s\" and \"%s\". " + \
+                        log.error("Regression \"%s\" enables sim_modes \"%s\" and \"%s\". "
                                   "The former is already a sub_mode of the latter.",
                                   regression_obj.name, sim_mode_obj_sub, sim_mode_obj.name)
                         sys.exit(1)
@@ -513,7 +513,7 @@ class Regressions(Modes):
                 # which case, skip
                 if run_mode_obj.name in sim_cfg.en_run_modes:
                     continue
-                self.run_opts.extend(run_mode_obj.run_opts)
+                regression_obj.run_opts.extend(run_mode_obj.run_opts)
 
             # Unpack tests
             if regression_obj.tests == []:
@@ -532,7 +532,6 @@ class Regressions(Modes):
                         log.error(
                             "Test \"%s\" added to regression \"%s\" not found!",
                             test, regression_obj.name)
-                        sys.exit(1)
                     tests_objs.append(test_obj)
                 regression_obj.tests = tests_objs
 

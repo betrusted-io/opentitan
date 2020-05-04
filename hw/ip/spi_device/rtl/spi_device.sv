@@ -6,6 +6,8 @@
 //
 //
 
+`include "prim_assert.sv"
+
 module spi_device #(
   parameter int SramAw = 9, // 2kB, SRAM Width is DW
   parameter int SramDw = 32
@@ -187,8 +189,14 @@ module spi_device #(
   );
 
   logic rxf_full_q, txf_empty_q;
-  always_ff @(posedge clk_spi_in)  rxf_full_q  <= ~rxf_wready;
-  always_ff @(posedge clk_spi_out) txf_empty_q <= ~txf_rvalid;
+  always_ff @(posedge clk_spi_in or negedge rst_ni) begin
+    if (!rst_ni) rxf_full_q <= 1'b0;
+    else         rxf_full_q <= ~rxf_wready;
+  end
+  always_ff @(posedge clk_spi_out or negedge rst_ni) begin
+    if (!rst_ni) txf_empty_q <= 1'b1;
+    else         txf_empty_q <= ~txf_rvalid;
+  end
   prim_flop_2sync #(.Width(1)) u_sync_rxf (
     .clk_i,
     .rst_ni,
@@ -562,13 +570,13 @@ module spi_device #(
 
   // make sure scanmode_i is never X (including during reset)
   `ASSERT_KNOWN(scanmodeKnown, scanmode_i, clk_i, 0)
-  `ASSERT_KNOWN(CioMisoEnOKnown, cio_miso_en_o, clk_i, !rst_ni)
+  `ASSERT_KNOWN(CioMisoEnOKnown, cio_miso_en_o)
 
-  `ASSERT_KNOWN(IntrRxfOKnown,         intr_rxf_o,         clk_i, !rst_ni)
-  `ASSERT_KNOWN(IntrRxlvlOKnown,       intr_rxlvl_o,       clk_i, !rst_ni)
-  `ASSERT_KNOWN(IntrTxlvlOKnown,       intr_txlvl_o,       clk_i, !rst_ni)
-  `ASSERT_KNOWN(IntrRxerrOKnown,       intr_rxerr_o,       clk_i, !rst_ni)
-  `ASSERT_KNOWN(IntrRxoverflowOKnown,  intr_rxoverflow_o,  clk_i, !rst_ni)
-  `ASSERT_KNOWN(IntrTxunderflowOKnown, intr_txunderflow_o, clk_i, !rst_ni)
+  `ASSERT_KNOWN(IntrRxfOKnown,         intr_rxf_o        )
+  `ASSERT_KNOWN(IntrRxlvlOKnown,       intr_rxlvl_o      )
+  `ASSERT_KNOWN(IntrTxlvlOKnown,       intr_txlvl_o      )
+  `ASSERT_KNOWN(IntrRxerrOKnown,       intr_rxerr_o      )
+  `ASSERT_KNOWN(IntrRxoverflowOKnown,  intr_rxoverflow_o )
+  `ASSERT_KNOWN(IntrTxunderflowOKnown, intr_txunderflow_o)
 
 endmodule

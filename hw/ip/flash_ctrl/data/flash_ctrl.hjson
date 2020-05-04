@@ -13,8 +13,18 @@
     { name: "op_error",   desc: "Operation failed with error" },
   ],
 
+  // Define flash_ctrl <-> flash_phy struct package
+  inter_signal_list: [
+    { struct:  "flash",          // flash_req_t, flash_rsp_t
+      type:    "req_rsp",
+      name:    "flash",          // flash_o (req), flash_i (rsp)
+      act:     "req",
+      package: "flash_ctrl_pkg", // Origin package (only needs for the requester)
+    }
+  ],
+
   param_list: [
-    { name: "NumBanks",
+    { name: "NBanks",
       desc: "Number of flash banks",
       type: "int",
       default: "2",
@@ -43,6 +53,8 @@
             CONTROL register and ADDR have been programmed
             '''
           resval: "0"
+          tags: [// Dont enable flash - it causes several side-effects.
+                 "excl:CsrAllTests:CsrExclWrite"],
         },
         { bits: "5:4",
           name: "OP",
@@ -131,35 +143,65 @@
         },
       ]
     },
-    { multireg: {
-        cname: "FLASH_CTRL",
-        name: "REGION_CFG_REGWEN"
-        desc: "Memory region registers configuration enable.",
-        count: "NumRegions",
-        swaccess: "rw0c",
-        hwaccess: "none",
-        fields: [
-            { bits: "0",
-              name: "REGION",
-              resval: "1"
-              desc: "Region register write enable.  Once set to 0, it can longer be configured to 1",
-              enum: [
-                { value: "0",
-                  name: "Region locked",
-                  desc: '''
-                    Region can no longer be configured until next reset
-                    '''
-                },
-                { value: "1",
-                  name: "Region enabled",
-                  desc: '''
-                    Region can be configured
-                    '''
-                },
-              ]
+// This multireg is temporarily removed until the nested multireg compact feature is fully implemented.
+// Until then, use only one register wen for all flash regions.
+// Another alternative solution is to move flash into topgen, this may have to be done anyways.
+
+//    { multireg: {
+//        cname: "FLASH_CTRL",
+//        name: "REGION_CFG_REGWEN"
+//        desc: "Memory region registers configuration enable.",
+//        count: "NumRegions",
+//        swaccess: "rw0c",
+//        hwaccess: "none",
+//        fields: [
+//            { bits: "0",
+//              name: "REGION",
+//              resval: "1"
+//              desc: "Region register write enable.  Once set to 0, it can longer be configured to 1",
+//              enum: [
+//                { value: "0",
+//                  name: "Region locked",
+//                  desc: '''
+//                    Region can no longer be configured until next reset
+//                    '''
+//                },
+//                { value: "1",
+//                  name: "Region enabled",
+//                  desc: '''
+//                    Region can be configured
+//                    '''
+//                },
+//              ]
+//            },
+//        ],
+//      },
+//    },
+    { name: "REGION_CFG_REGWEN",
+      desc: "Memory region registers configuration enable.",
+      swaccess: "rw0c",
+      hwaccess: "none",
+      fields: [
+        { bits: "0",
+          name: "EN",
+          desc: "Region register write enable.  Once set to 0, it can longer be configured to 1",
+          resval: "1",
+          enum: [
+            { value: "0",
+              name: "Region locked",
+              desc: '''
+                Region can no longer be configured until next reset
+                '''
             },
-        ],
-      },
+            { value: "1",
+              name: "Region enabled",
+              desc: '''
+                Region can be configured
+                '''
+            },
+          ],
+        },
+      ]
     },
 
     { multireg: {
@@ -169,8 +211,7 @@
         count: "NumRegions",
         swaccess: "rw",
         hwaccess: "hro",
-        regwen: "REGION_CFG_REGWEN_REGION",
-        regwen_incr: "true",
+        regwen: "REGION_CFG_REGWEN",
         fields: [
             { bits: "0",
               name: "EN",
@@ -279,7 +320,7 @@
         cname: "FLASH_CTRL",
         name: "MP_BANK_CFG",
         desc: "Memory protect bank configuration",
-        count: "NumBanks",
+        count: "NBanks",
         swaccess: "rw",
         hwaccess: "hro",
         regwen: "BANK_CFG_REGWEN"
@@ -312,10 +353,10 @@
       hwaccess: "hwo",
       hwext: "true",
       fields: [
-        { bits: "0",    name: "rd_full",    desc: "Flash read fifo full, software must consume data" },
-        { bits: "1",    name: "rd_empty",   desc: "Flash read fifo empty" },
+        { bits: "0",    name: "rd_full",    desc: "Flash read fifo full, software must consume data"},
+        { bits: "1",    name: "rd_empty",   desc: "Flash read fifo empty", resval: "1"},
         { bits: "2",    name: "prog_full",  desc: "Flash program fifo full"},
-        { bits: "3",    name: "prog_empty", desc: "Flash program fifo empty, software must provide data"},
+        { bits: "3",    name: "prog_empty", desc: "Flash program fifo empty, software must provide data", resval: "1"},
         { bits: "4",    name: "init_wip",   desc: "Flash controller undergoing init"},
         { bits: "16:8", name: "error_page", desc: "Flash controller error page."},
         { bits: "17",   name: "error_bank", desc: "Flash controller error bank."},

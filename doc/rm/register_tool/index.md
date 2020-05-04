@@ -22,12 +22,14 @@ Setup and examples of the tool are given in the README.md file in the `util/regg
 
 The tool input is an Hjson file containing the Comportable description of the IP block and its registers.
 
-A description of Hjson (a variant of JSON) and the recommended style is in the [Hjson Usage and Style Guide]({{< relref "hjson_usage_style.md" >}}).
+A description of Hjson (a variant of JSON) and the recommended style is in the [Hjson Usage and Style Guide]({{< relref "doc/rm/hjson_usage_style.md" >}}).
 
 The tables below describe valid keys for each context.
 It is an error if *required* keys are missing from the input JSON.
 *Optional* keys may be provided in the input file as needed, as noted in the tables the tool may insert them (with default or computed values) during validation so the output generators do not have to special case them.
 Keys marked as "inserted by tool" should not be in the input JSON (they will be silently overwritten if they are there), they are derived by the tool during validation of the input and available to the output generators.
+
+For more detail on the non-register entries of the Hjson configuration file, see [this section]({{< relref "doc/rm/comportability_specification/index.md#configuration-description-hjson" >}}) of the Comportability Specification.
 
 {{% selfdoc "reggen" %}}
 
@@ -216,11 +218,55 @@ For example the data bits and mask bits could be in the lower and upper parts of
 In this case instance 1 will use bits 1 and 17, instance 2 will use 2 and 18 and so on.
 Instance 16 does not fit, so will start a new register.
 
+### Verification Tags Definition and Format
+
+This section documents the usage of tags in the register Hjson file.
+`Tags` is a list of strings that could add into a register, field, or memory.
+It can store special information such as csr register/field exclusion, memory exclusion, reset test exclusion, etc.
+Adding a tag follows the string format `"tag_name:item1:item2..."`.
+For example:
+```hjson
+    tags: [// don't write to wdata - it affects several other csrs
+             "excl:CsrNonInitTests:CsrExclWrite"]
+```
+
+Current `tags` supports:
+* CSR tests exclusions:
+  Simulation based verification will run four CSR tests (if applicable to the module) through automation.
+  Detailed description of this methodology is documented in [CSR utilities]({{< relref "hw/dv/sv/csr_utils/README.md" >}}).
+  The tag name is `excl`, and items are enum values for what CSR tests to exclude from, and what type of exclusions.
+  The enum types for exclusion test are:
+  ```systemverilog
+  // csr test types
+  typedef enum bit [NUM_CSR_TEST-1:0] {
+    CsrNonTest        = 5'h0,
+    // elementary test types
+    CsrHwResetTest    = 5'h1,
+    CsrRwTest         = 5'h2,
+    CsrBitBashTest    = 5'h4,
+    CsrAliasingTest   = 5'h8,
+    // combinational test types (combinations of the above), used for exclusion tagging
+    CsrNonInitTests   = 5'he, // all but HwReset test
+    CsrAllTests       = 5'hf  // all tests
+  } csr_test_type_e;
+  ```
+  The enum types for exclusion type are:
+  ``` systemverilog
+  typedef enum bit[2:0] {
+    CsrNoExcl         = 3'b000, // no exclusions
+    CsrExclInitCheck  = 3'b001, // exclude csr from init val check
+    CsrExclWriteCheck = 3'b010, // exclude csr from write-read check
+    CsrExclCheck      = 3'b011, // exclude csr from init or write-read check
+    CsrExclWrite      = 3'b100, // exclude csr from write
+    CsrExclAll        = 3'b111  // exclude csr from init or write or writ-read check
+  } csr_excl_type_e;
+  ```
+
 ## Register Tool Hardware Generation
 
 This section details the register generation for hardware instantiation.
 The input to the tool for this generation is the same `.hjson` file described above.
-The output is two Verilog files that can be instantiated by a peripheral that follows the [Comportability Guidelines]({{< relref "comportability_specification" >}}).
+The output is two Verilog files that can be instantiated by a peripheral that follows the [Comportability Guidelines]({{< relref "doc/rm/comportability_specification" >}}).
 
 The register generation tool will generate the RTL if it is invoked with the `-r` flag.
 The `-t <directory>` flag is used to specify the output directory where the two files will be written.

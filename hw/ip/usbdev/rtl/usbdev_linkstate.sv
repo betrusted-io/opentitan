@@ -23,8 +23,8 @@ module usbdev_linkstate (
   output logic [2:0] link_state_o
 );
 
-  localparam SUSPEND_TIMEOUT = 12'd3000; // 3ms by spec
-  localparam RESET_TIMEOUT   = 3'd3;    // 3us. Can be 2.5us - 10ms by spec
+  localparam logic [11:0] SUSPEND_TIMEOUT = 12'd3000; // 3ms by spec
+  localparam logic [2:0]  RESET_TIMEOUT   = 3'd3;     // 3us. Can be 2.5us - 10ms by spec
 
   typedef enum logic [2:0] {
     // Unpowered state
@@ -54,7 +54,7 @@ module usbdev_linkstate (
   logic         line_se0_raw, line_idle_raw;
   logic         see_se0, see_idle, see_pwr_sense;
 
-  // Reset FSM 
+  // Reset FSM
   logic [2:0]      link_rst_timer_d, link_rst_timer_q;
   link_rst_state_e link_rst_state_d, link_rst_state_q;
   logic            link_reset; // reset detected (level)
@@ -73,7 +73,7 @@ module usbdev_linkstate (
 
   assign link_disconnect_o = (link_state_q == LinkDisconnect);
   assign link_connect_o    = (link_state_q != LinkDisconnect);
-  assign link_suspend_o    = (link_state_q == LinkSuspend || 
+  assign link_suspend_o    = (link_state_q == LinkSuspend ||
     link_state_q == LinkPoweredSuspend);
   assign link_active       = (link_state_q == LinkActive);
   // Link state is stable, so we can output it to the register
@@ -115,7 +115,8 @@ module usbdev_linkstate (
   always_comb begin
     link_state_d = link_state_q;
     link_resume_o = 0;
-    monitor_inac = 0;
+    monitor_inac = see_pwr_sense ? ((link_state_q == LinkPowered) | (link_state_q == LinkActive)) :
+                                   1'b0;
 
     // If VBUS ever goes away the link has disconnected
     if (!see_pwr_sense) begin
@@ -130,7 +131,6 @@ module usbdev_linkstate (
         end
 
         LinkPowered: begin
-          monitor_inac = 1;
           if (ev_reset) begin
             link_state_d = LinkActive;
           end else if (ev_bus_inactive) begin
@@ -149,7 +149,6 @@ module usbdev_linkstate (
 
         // Active (USB spec: Default / Address / Configured)
         LinkActive: begin
-          monitor_inac = 1;
           if (ev_bus_inactive) begin
             link_state_d = LinkSuspend;
           end
@@ -221,9 +220,9 @@ module usbdev_linkstate (
         end
         link_reset = 1'b1;
       end
-    
+
       default : link_rst_state_d = NoRst;
-    endcase  
+    endcase
   end
 
   assign link_reset_o = link_reset;
@@ -277,9 +276,9 @@ module usbdev_linkstate (
           link_inac_state_d  = Active;
         end
       end
-    
+
       default : link_inac_state_d = Active;
-    endcase  
+    endcase
   end
 
   always_ff @(posedge clk_48mhz_i or negedge rst_ni) begin : proc_reg_idle_det

@@ -97,8 +97,8 @@ int main(int argc, char *argv[]) {
   // libcrypto-related variables and buffers
   unsigned char *iv = (unsigned char *)"0000000000000000";
   int cipher_text_len;
-  unsigned char cipher_text[32];  // libcrypto expects at least 32B buffers
-  unsigned char decrypted_text[32];
+  unsigned char cipher_text[16];
+  unsigned char decrypted_text[16];
 
   printf("Encryption key:\t\t");
   aes_print_block((const unsigned char *)key, 16);
@@ -213,8 +213,8 @@ int main(int argc, char *argv[]) {
   }
 
   // check state vs BoringSSL/OpenSSL
-  cipher_text_len =
-      crypto_encrypt(cipher_text, iv, plain_text, 16, key, key_len);
+  cipher_text_len = crypto_encrypt(cipher_text, iv, plain_text, 16, key,
+                                   key_len, kCryptoAesEcb);
   if (!check_block(state, cipher_text, 0)) {
     printf("SUCCESS: state matches %s cipher text\n", crypto_lib);
   } else {
@@ -333,8 +333,8 @@ int main(int argc, char *argv[]) {
   }
 
   // check state vs BoringSSL/OpenSSL
-  crypto_decrypt(decrypted_text, iv, cipher_text, cipher_text_len, key,
-                 key_len);
+  crypto_decrypt(decrypted_text, iv, cipher_text, cipher_text_len, key, key_len,
+                 kCryptoAesEcb);
   if (!check_block(state, decrypted_text, 0)) {
     printf("SUCCESS: state matches %s decrypted text\n", crypto_lib);
   } else {

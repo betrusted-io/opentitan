@@ -11,9 +11,9 @@ title: "UART DV Plan"
   * Verify TileLink device protocol compliance with an SVA based testbench
 
 ## Current status
-* [Design & verification stage]({{< relref "doc/project/hw_dashboard" >}})
-  * [HW development stages]({{< relref "doc/project/hw_stages.md" >}})
-* DV regression results dashboard (link TBD)
+* [Design & verification stage]({{< relref "hw" >}})
+  * [HW development stages]({{< relref "doc/project/development_stages.md" >}})
+* [Simulation results](https://reports.opentitan.org/hw/ip/uart/dv/latest/results.html)
 
 ## Design features
 For detailed information on UART design features, please see the [UART design specification]({{< relref "hw/ip/uart/doc" >}}).
@@ -58,10 +58,9 @@ data, parity, baud rate etc.
 These baud rates are supported: 9600, 115200, 230400, 1Mbps(1048576), 2Mbps(2097152)
 
 ### UVM RAL Model
-The UART RAL model is created with the `hw/dv/tools/gen_ral_pkg.py` wrapper script at the start of the simulation automatically and is placed in the build area, along with a corresponding `fusesoc` core file.
-The wrapper script invokes the [regtool.py]({{< relref "util/reggen/README.md" >}}) script from within to generate the RAL model.
+The UART RAL model is created with the [`ralgen`]({{< relref "hw/dv/tools/ralgen/README.md" >}}) FuseSoC generator script automatically when the simulation is at the build stage.
 
-It can be created manually by running `make ral` command from the `dv` area.
+It can be created manually (separately) by running `make` in the the `hw/` area.
 
 ### Stimulus strategy
 #### Test sequences

@@ -2,7 +2,7 @@ CAPI=2:
 # Copyright lowRISC contributors.
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
-name: "lowrisc:ip:aes:0.5"
+name: "lowrisc:ip:aes:0.6"
 description: "AES unit"
 filesets:
   files_rtl:
@@ -14,6 +14,11 @@ filesets:
       - rtl/aes_reg_pkg.sv
       - rtl/aes_reg_top.sv
       - rtl/aes_core.sv
+      - rtl/aes_prng.sv
+      - rtl/aes_ctr.sv
+      - rtl/aes_control.sv
+      - rtl/aes_cipher_core.sv
+      - rtl/aes_cipher_control.sv
       - rtl/aes_sub_bytes.sv
       - rtl/aes_sbox.sv
       - rtl/aes_sbox_lut.sv
@@ -22,7 +27,6 @@ filesets:
       - rtl/aes_mix_columns.sv
       - rtl/aes_mix_single_column.sv
       - rtl/aes_key_expand.sv
-      - rtl/aes_control.sv
       - rtl/aes.sv
     file_type: systemVerilogSource
 
@@ -44,6 +48,10 @@ filesets:
       - lint/aes.waiver
     file_type: waiver
 
+  files_formal:
+    files:
+      - dv/tb/aes_bind.sv
+    file_type: systemVerilogSource
 
 parameters:
   SYNTHESIS:
@@ -56,6 +64,13 @@ targets:
     filesets:
       - tool_verilator  ? (files_verilator_waiver)
       - tool_ascentlint ? (files_ascentlint_waiver)
+      - target_formal   ? (files_formal)
+      - files_rtl
+    toplevel: aes
+
+  formal:
+    filesets:
+      - files_formal
       - files_rtl
     toplevel: aes
 
@@ -69,4 +84,14 @@ targets:
         mode: lint-only
         verilator_options:
           - "-Wall"
+
+  syn:
+    <<: *default_target
+    # TODO: set default to DC once
+    # this option is available
+    # olofk/edalize#89
+    default_tool: icarus
+    parameters:
+      - SYNTHESIS=true
+
 

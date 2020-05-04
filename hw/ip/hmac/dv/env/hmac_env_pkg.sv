@@ -9,7 +9,7 @@ package hmac_env_pkg;
   import dv_utils_pkg::*;
   import csr_utils_pkg::*;
   import tl_agent_pkg::*;
-  import alert_agent_pkg::*;
+  import alert_esc_agent_pkg::*;
   import cryptoc_dpi_pkg::*;
   import dv_lib_pkg::*;
   import cip_base_pkg::*;
@@ -38,7 +38,7 @@ package hmac_env_pkg;
 
   typedef enum {
     HmacDone,
-    HmacMsgFifoFull,
+    HmacMsgFifoEmpty,
     HmacErr
   } hmac_intr_e;
 
@@ -60,11 +60,13 @@ package hmac_env_pkg;
     HashProcess
   } hmac_cmd_e;
 
-  typedef enum {
-    NoError,
-    SwPushMsgWhenShaDisabled,
-    SwHashStartWhenShaDisabled,
-    SwUpdateSecretKeyInProcess
+  typedef enum bit [TL_DW-1:0] {
+    NoError                    = 32'h 0000_0000,
+    SwPushMsgWhenShaDisabled   = 32'h 0000_0001,
+    SwHashStartWhenShaDisabled = 32'h 0000_0002,
+    SwUpdateSecretKeyInProcess = 32'h 0000_0003,
+    SwHashStartWhenActive      = 32'h 0000_0004,
+    SwPushMsgWhenIdle          = 32'h 0000_0005
   } err_code_e;
 
   typedef class hmac_env_cfg;

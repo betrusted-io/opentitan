@@ -6,7 +6,7 @@
 # for OpenTitan.
 
 # Global configuration options.
-ARG VERILATOR_VERSION=4.010
+ARG VERILATOR_VERSION=4.028
 
 # The RISCV toolchain version should match the release tag used in GitHub.
 ARG RISCV_TOOLCHAIN_TAR_VERSION=20190807-1
@@ -65,6 +65,7 @@ COPY --from=verilator /tools/verilator/${VERILATOR_VERSION} verilator/${VERILATO
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
+    clang-format-3.8 \
     git \
     gnupg2 \
     libc6-i386 \

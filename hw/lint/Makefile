@@ -2,7 +2,8 @@
 # Licensed under the Apache License, Version 2.0, see LICENSE for details.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Makefile with ascentlint and verilator-lint targets for OpenTitan
+# Makefile with ascentlint, verilator-lint and verible style lint
+# targets for OpenTitan
 #
 # TODO: currently we cannot support parallel builds since some fusesoc cores
 # define filesets with files outside the current folder (e.g. using relative
@@ -15,6 +16,7 @@ REPORT_DIR ?= reports
 
 IPS ?=  ip-aes                 \
         ip-alert_handler       \
+        ip-clkmgr              \
         ip-flash_ctrl          \
         ip-gpio                \
         ip-hmac                \
@@ -23,6 +25,7 @@ IPS ?=  ip-aes                 \
         ip-padctrl             \
         ip-padring             \
         ip-pinmux              \
+        ip-pwrmgr              \
         ip-rv_core_ibex        \
         ip-rv_dm               \
         ip-rv_plic_example     \
@@ -32,6 +35,7 @@ IPS ?=  ip-aes                 \
         ip-usbdev              \
         ip-usb_fs_nb_pe        \
         ip-usbuart             \
+        ip-rstmgr              \
         tlul-socket_1n         \
         tlul-socket_m1         \
         tlul-adapter_reg       \
@@ -41,6 +45,7 @@ IPS ?=  ip-aes                 \
 
 ips_lint  = $(addsuffix _lint, $(IPS))
 ips_vlint = $(addsuffix _vlint, $(IPS))
+ips_slint = $(addsuffix _slint, $(IPS))
 
 ######################
 # ascentlint targets #
@@ -65,15 +70,20 @@ $(ips_lint):
 # creates a (filtered) summary report from all available ascentlint logs/rpts
 # note that lint reports have to be filtered using this script before publishing
 # any information from these reports publicly
+# note, the filtering script is simplistic ATM and just looks for *.rpt files
+# hence we have to temporarily write the output to a file with a different extension
+# since otherwise the gen_report script will try to process the summary report as well.
 report:
+	$(eval TMPFILE=$(shell mktemp))
 	rm -f ${REPORT_DIR}/lint_summary.rpt
-	./gen_report.sh | tee ${REPORT_DIR}/lint_summary.rpt
+	./util/gen-report.sh | tee $(TMPFILE)
+	cp $(TMPFILE) ${REPORT_DIR}/lint_summary.rpt
+	rm -f $(TMPFILE)
 
 #####################
 # verilator targets #
 #####################
 
-# lint all discovered targets and make a report
 vall: vlint
 	$(MAKE) vreport
 
@@ -86,11 +96,30 @@ $(ips_vlint):
 	rm -rf build
 	mkdir -p ${REPORT_DIR}
 	-fusesoc --cores-root ${CORE_ROOT} run --target=lint lowrisc:$(subst -,:,$(patsubst %_vlint,%,$@))
-#	cp build/lowrisc_*$(patsubst %_vlint,%,$@)*/vlint-verilator/verilator-lint.rpt ${REPORT_DIR}/$@.rpt
 
-# TODO: add a verilator summary report function
-# add a summary report option for verilator
+# TODO: add summary reporting
 vreport:
+
+##############################
+# verible style lint targets #
+##############################
+
+sall: slint
+	$(MAKE) sreport
+
+slint: clean
+	@echo Discovered vlint targets:
+	@echo -e "\n $(patsubst %,%\\n,$(strip $(ips_vlint)))"
+	$(MAKE) $(ips_vlint)
+
+# TODO(#1727): pass Verible config file to FuseSoC, once supported by Verible
+$(ips_slint):
+	rm -rf build
+	mkdir -p ${REPORT_DIR}
+	-fusesoc --cores-root ${CORE_ROOT} run --target=lint --tool=veriblelint lowrisc:$(subst -,:,$(patsubst %_slint,%,$@))
+
+# TODO: add summary reporting
+sreport:
 
 ##################
 # common targets #
@@ -100,4 +129,5 @@ clean:
 	rm -rf build
 	rm -rf ${REPORT_DIR}/*
 
-.PHONY: all lint $(ips_lint) report vall vlint $(ips_vlint) clean
+.PHONY: all lint $(ips_lint) report vall vlint $(ips_vlint) \
+        vreport sall slint $(ips_slint) clean sreport

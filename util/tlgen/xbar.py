@@ -3,13 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging as log
-from typing import List
 
-from .item import Edge, Node, NodeType
-
-#Nodes = List[Node]
-#Edges = List[Edge]
-#Clocks = List[str]
+from .item import Edge, NodeType
 
 
 class Xbar:
@@ -22,6 +17,7 @@ class Xbar:
     name = ""  # str  # e.g. "main" --> main_xbar
     clocks = []  # All clocks of xbar
     resets = []  # All resets of xbar
+    ip_path = ""  # additional path to generated rtl/dv folders: outdir/ip_path/rtl
 
     # prefix is useful if SoC has more than one Xbar
 
@@ -36,8 +32,8 @@ class Xbar:
         self.resets = []
 
     def __repr__(self):
-        out = "<Xbar(%s) #nodes:%d clock:%s" % (self.name, len(self.nodes),
-                                                self.clock)
+        out = "<Xbar(%s) #nodes:%d clock:%s" % (self.name, len(
+            self.nodes), self.clock)
         out += " #edges:%d>\n" % (len(self.edges))
 
         # print nodes
@@ -81,9 +77,10 @@ class Xbar:
             return node
 
         if len(node.ds) == 0:
-            log.error("Node (%s) doesn't have downstream Node: US(%s), DS(%s)"
-                      % (node.name, ' '.join(map(repr, node.us)), ' '.join(
-                          map(repr, node.ds))))
+            log.error(
+                "Node (%s) doesn't have downstream Node: US(%s), DS(%s)" %
+                (node.name, ' '.join(map(repr, node.us)), ' '.join(
+                    map(repr, node.ds))))
         return self.get_downstream_device(node.ds[0].ds)
 
     def get_downstream_device_from_edge(self, edge):  # Edge -> Node

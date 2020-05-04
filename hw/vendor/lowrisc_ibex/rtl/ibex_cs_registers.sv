@@ -9,9 +9,14 @@
  * Control and Status Registers (CSRs) following the RISC-V Privileged
  * Specification, draft version 1.11
  */
+
+`include "prim_assert.sv"
+
 module ibex_cs_registers #(
     parameter bit          DbgTriggerEn     = 0,
-    parameter int unsigned MHPMCounterNum   = 8,
+    parameter bit          DataIndTiming    = 1'b0,
+    parameter bit          ICache           = 1'b0,
+    parameter int unsigned MHPMCounterNum   = 10,
     parameter int unsigned MHPMCounterWidth = 40,
     parameter bit          PMPEnable        = 0,
     parameter int unsigned PMPGranularity   = 0,
@@ -42,6 +47,7 @@ module ibex_cs_registers #(
     input  ibex_pkg::csr_num_e   csr_addr_i,
     input  logic [31:0]          csr_wdata_i,
     input  ibex_pkg::csr_op_e    csr_op_i,
+    input                        csr_op_en_i,
     output logic [31:0]          csr_rdata_o,
 
     // interrupts
@@ -49,12 +55,9 @@ module ibex_cs_registers #(
     input  logic                 irq_timer_i,
     input  logic                 irq_external_i,
     input  logic [14:0]          irq_fast_i,
-    output logic                 irq_pending_o,          // interupt request pending
     input  logic                 nmi_mode_i,
-    output logic                 csr_msip_o,             // software interrupt pending
-    output logic                 csr_mtip_o,             // timer interrupt pending
-    output logic                 csr_meip_o,             // external interrupt pending
-    output logic [14:0]          csr_mfip_o,             // fast interrupt pending
+    output logic                 irq_pending_o,          // interrupt request pending
+    output ibex_pkg::irqs_t      irqs_o,                 // interrupt requests qualified with mie
     output logic                 csr_mstatus_mie_o,
     output logic [31:0]          csr_mepc_o,
 
@@ -74,9 +77,16 @@ module ibex_cs_registers #(
 
     input  logic [31:0]          pc_if_i,
     input  logic [31:0]          pc_id_i,
+    input  logic [31:0]          pc_wb_i,
 
+    // CPU control bits
+    output logic                 data_ind_timing_o,
+    output logic                 icache_enable_o,
+
+    // Exception save/restore
     input  logic                 csr_save_if_i,
     input  logic                 csr_save_id_i,
+    input  logic                 csr_save_wb_i,
     input  logic                 csr_restore_mret_i,
     input  logic                 csr_restore_dret_i,
     input  logic                 csr_save_cause_i,
@@ -85,19 +95,18 @@ module ibex_cs_registers #(
     output logic                 illegal_csr_insn_o,     // access to non-existent CSR,
                                                          // with wrong priviledge level, or
                                                          // missing write permissions
-    input  logic                 instr_new_id_i,         // ID stage sees a new instr
-
     // Performance Counters
     input  logic                 instr_ret_i,            // instr retired in ID/EX stage
     input  logic                 instr_ret_compressed_i, // compressed instr retired
-    input  logic                 imiss_i,                // instr fetch
-    input  logic                 pc_set_i,               // PC was set to a new value
+    input  logic                 iside_wait_i,           // core waiting for the iside
     input  logic                 jump_i,                 // jump instr seen (j, jr, jal, jalr)
     input  logic                 branch_i,               // branch instr seen (bf, bnf)
     input  logic                 branch_taken_i,         // branch was taken
     input  logic                 mem_load_i,             // load from memory in this cycle
     input  logic                 mem_store_i,            // store to memory in this cycle
-    input  logic                 lsu_busy_i
+    input  logic                 dside_wait_i,           // core waiting for the dside
+    input  logic                 mul_wait_i,             // core waiting for multiply
+    input  logic                 div_wait_i              // core waiting for divide
 );
 
   import ibex_pkg::*;
@@ -105,18 +114,18 @@ module ibex_cs_registers #(
   // misa
   localparam logic [1:0] MXL = 2'd1; // M-XLEN: XLEN in M-Mode for RV32
   localparam logic [31:0] MISA_VALUE =
-      (0          <<  0)  // A - Atomic Instructions extension
-    | (1          <<  2)  // C - Compressed extension
-    | (0          <<  3)  // D - Double precision floating-point extension
-    | (32'(RV32E) <<  4)  // E - RV32E base ISA
-    | (0          <<  5)  // F - Single precision floating-point extension
-    | (1          <<  8)  // I - RV32I/64I/128I base ISA
-    | (32'(RV32M) << 12)  // M - Integer Multiply/Divide extension
-    | (0          << 13)  // N - User level interrupts supported
-    | (0          << 18)  // S - Supervisor mode implemented
-    | (1          << 20)  // U - User mode implemented
-    | (0          << 23)  // X - Non-standard extensions present
-    | (32'(MXL)   << 30); // M-XLEN
+      (0           <<  0)  // A - Atomic Instructions extension
+    | (1           <<  2)  // C - Compressed extension
+    | (0           <<  3)  // D - Double precision floating-point extension
+    | (32'(RV32E)  <<  4)  // E - RV32E base ISA
+    | (0           <<  5)  // F - Single precision floating-point extension
+    | (32'(!RV32E) <<  8)  // I - RV32I/64I/128I base ISA
+    | (32'(RV32M)  << 12)  // M - Integer Multiply/Divide extension
+    | (0           << 13)  // N - User level interrupts supported
+    | (0           << 18)  // S - Supervisor mode implemented
+    | (1           << 20)  // U - User mode implemented
+    | (0           << 23)  // X - Non-standard extensions present
+    | (32'(MXL)    << 30); // M-XLEN
 
   typedef struct packed {
     logic      mie;
@@ -130,15 +139,6 @@ module ibex_cs_registers #(
     logic      mpie;
     priv_lvl_e mpp;
   } StatusStk_t;
-
-  // struct for mip/mie CSRs
-  typedef struct packed {
-    logic        irq_software;
-    logic        irq_timer;
-    logic        irq_external;
-    logic [14:0] irq_fast; // 15 fast interrupts,
-                           // one interrupt is reserved for NMI (not visible through mip/mie)
-  } Interrupts_t;
 
   typedef struct packed {
       x_debug_ver_e xdebugver;
@@ -158,19 +158,26 @@ module ibex_cs_registers #(
       priv_lvl_e    prv;
   } Dcsr_t;
 
+  // CPU control register fields
+  typedef struct packed {
+    logic [31:2] unused_ctrl;
+    logic        data_ind_timing;
+    logic        icache_enable;
+  } CpuCtrl_t;
+
   // Interrupt and exception control signals
   logic [31:0] exception_pc;
 
   // CSRs
   priv_lvl_e   priv_lvl_q, priv_lvl_d;
   Status_t     mstatus_q, mstatus_d;
-  Interrupts_t mie_q, mie_d;
+  irqs_t       mie_q, mie_d;
   logic [31:0] mscratch_q, mscratch_d;
   logic [31:0] mepc_q, mepc_d;
   logic  [5:0] mcause_q, mcause_d;
   logic [31:0] mtval_q, mtval_d;
   logic [31:0] mtvec_q, mtvec_d;
-  Interrupts_t mip;
+  irqs_t       mip;
   Dcsr_t       dcsr_q, dcsr_d;
   logic [31:0] depc_q, depc_d;
   logic [31:0] dscratch0_q, dscratch0_d;
@@ -192,7 +199,6 @@ module ibex_cs_registers #(
   logic [MHPMCounterNum+3-1:0] mcountinhibit_d, mcountinhibit_q;
   logic                        mcountinhibit_we;
 
-  logic [63:0] mhpmcounter_d [32];
   // mhpmcounter flops are elaborated below providing only the precise number that is required based
   // on MHPMCounterNum/MHPMCounterWidth. This signal connects to the Q output of these flops
   // where they exist and is otherwise 0.
@@ -207,6 +213,9 @@ module ibex_cs_registers #(
   logic [31:0] tselect_rdata;
   logic [31:0] tmatch_control_rdata;
   logic [31:0] tmatch_value_rdata;
+
+  // CPU control bits
+  CpuCtrl_t    cpuctrl_rdata, cpuctrl_wdata;
 
   // CSR update logic
   logic [31:0] csr_wdata_int;
@@ -239,10 +248,10 @@ module ibex_cs_registers #(
   assign illegal_csr_insn_o = csr_access_i & (illegal_csr | illegal_csr_write | illegal_csr_priv);
 
   // mip CSR is purely combinational - must be able to re-enable the clock upon WFI
-  assign mip.irq_software = irq_software_i & mie_q.irq_software;
-  assign mip.irq_timer    = irq_timer_i    & mie_q.irq_timer;
-  assign mip.irq_external = irq_external_i & mie_q.irq_external;
-  assign mip.irq_fast     = irq_fast_i     & mie_q.irq_fast;
+  assign mip.irq_software = irq_software_i;
+  assign mip.irq_timer    = irq_timer_i;
+  assign mip.irq_external = irq_external_i;
+  assign mip.irq_fast     = irq_fast_i;
 
   // read logic
   always_comb begin
@@ -406,6 +415,11 @@ module ibex_cs_registers #(
         illegal_csr   = ~DbgTriggerEn;
       end
 
+      // Custom CSR for controlling CPU features
+      CSR_CPUCTRL: begin
+        csr_rdata_int = {cpuctrl_rdata};
+      end
+
       default: begin
         illegal_csr = 1'b1;
       end
@@ -548,6 +562,9 @@ module ibex_cs_registers #(
           csr_save_id_i: begin
             exception_pc = pc_id_i;
           end
+          csr_save_wb_i: begin
+            exception_pc = pc_wb_i;
+          end
           default:;
         endcase
 
@@ -606,34 +623,26 @@ module ibex_cs_registers #(
 
   // CSR operation logic
   always_comb begin
-    csr_wreq = 1'b1;
-
     unique case (csr_op_i)
       CSR_OP_WRITE: csr_wdata_int =  csr_wdata_i;
       CSR_OP_SET:   csr_wdata_int =  csr_wdata_i | csr_rdata_o;
       CSR_OP_CLEAR: csr_wdata_int = ~csr_wdata_i & csr_rdata_o;
-      CSR_OP_READ: begin
-        csr_wdata_int = csr_wdata_i;
-        csr_wreq      = 1'b0;
-      end
-      default: begin
-        csr_wdata_int = csr_wdata_i;
-        csr_wreq      = 1'b0;
-      end
+      CSR_OP_READ:  csr_wdata_int = csr_wdata_i;
+      default:      csr_wdata_int = csr_wdata_i;
     endcase
   end
 
+  assign csr_wreq = csr_op_en_i &
+    (csr_op_i inside {CSR_OP_WRITE,
+                      CSR_OP_SET,
+                      CSR_OP_CLEAR});
+
   // only write CSRs during one clock cycle
-  assign csr_we_int  = csr_wreq & ~illegal_csr_insn_o & instr_new_id_i;
+  assign csr_we_int  = csr_wreq & ~illegal_csr_insn_o;
 
   assign csr_rdata_o = csr_rdata_int;
 
   // directly output some registers
-  assign csr_msip_o  = mip.irq_software;
-  assign csr_mtip_o  = mip.irq_timer;
-  assign csr_meip_o  = mip.irq_external;
-  assign csr_mfip_o  = mip.irq_fast;
-
   assign csr_mepc_o  = mepc_q;
   assign csr_depc_o  = depc_q;
   assign csr_mtvec_o = mtvec_q;
@@ -644,7 +653,10 @@ module ibex_cs_registers #(
   assign debug_ebreakm_o     = dcsr_q.ebreakm;
   assign debug_ebreaku_o     = dcsr_q.ebreaku;
 
-  assign irq_pending_o = csr_msip_o | csr_mtip_o | csr_meip_o | (|csr_mfip_o);
+  // Qualify incoming interrupt requests in mip CSR with mie CSR for controller and to re-enable
+  // clock upon WFI (must be purely combinational).
+  assign irqs_o        = mip & mie_q;
+  assign irq_pending_o = |irqs_o;
 
   // actual registers
   always_ff @(posedge clk_i or negedge rst_ni) begin
@@ -856,15 +868,16 @@ module ibex_cs_registers #(
     mhpmcounter_incr[0]  = 1'b1;                   // mcycle
     mhpmcounter_incr[1]  = 1'b0;                   // reserved
     mhpmcounter_incr[2]  = instr_ret_i;            // minstret
-    mhpmcounter_incr[3]  = lsu_busy_i;             // cycles waiting for data memory
-    mhpmcounter_incr[4]  = imiss_i & ~pc_set_i;    // cycles waiting for instr fetches
-                                                   // excl. jump and branch set cycles
+    mhpmcounter_incr[3]  = dside_wait_i;           // cycles waiting for data memory
+    mhpmcounter_incr[4]  = iside_wait_i;           // cycles waiting for instr fetches
     mhpmcounter_incr[5]  = mem_load_i;             // num of loads
     mhpmcounter_incr[6]  = mem_store_i;            // num of stores
     mhpmcounter_incr[7]  = jump_i;                 // num of jumps (unconditional)
     mhpmcounter_incr[8]  = branch_i;               // num of branches (conditional)
     mhpmcounter_incr[9]  = branch_taken_i;         // num of taken branches (conditional)
     mhpmcounter_incr[10] = instr_ret_compressed_i; // num of compressed instr
+    mhpmcounter_incr[11] = mul_wait_i;             // cycles waiting for multiply
+    mhpmcounter_incr[12] = div_wait_i;             // cycles waiting for divide
 
     // inactive counters
     for (int unsigned i=3+MHPMCounterNum; i<32; i++) begin : gen_mhpmcounter_incr_inactive
@@ -888,55 +901,51 @@ module ibex_cs_registers #(
     end
   end
 
-  // update
-  always_comb begin : mhpmcounter_update
-    mhpmcounter_d = mhpmcounter;
+  // mcycle and minstret
+  ibex_counters #(
+    .MaxNumCounters(1),
+    .NumCounters(1),
+    .CounterWidth(64)
+  ) mcycle_counter_i (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .counter_inc_i(mhpmcounter_incr[0] & ~mcountinhibit[0]),
+    .counterh_we_i(mhpmcounterh_we[0]),
+    .counter_we_i(mhpmcounter_we[0]),
+    .counter_val_i(csr_wdata_int),
+    .counter_val_o(mhpmcounter[0:0])
+  );
 
-    for (int i=0; i<32; i++) begin : gen_mhpmcounter_update
+  ibex_counters #(
+    .MaxNumCounters(1),
+    .NumCounters(1),
+    .CounterWidth(64)
+  ) minstret_counter_i (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .counter_inc_i(mhpmcounter_incr[2] & ~mcountinhibit[2]),
+    .counterh_we_i(mhpmcounterh_we[2]),
+    .counter_we_i(mhpmcounter_we[2]),
+    .counter_val_i(csr_wdata_int),
+    .counter_val_o(mhpmcounter[2:2])
+  );
 
-      // increment
-      if (mhpmcounter_incr[i] & ~mcountinhibit[i]) begin
-        mhpmcounter_d[i] = mhpmcounter[i] + 64'h1;
-      end
+  // reserved:
+  assign mhpmcounter[1] = '0;
 
-      // write
-      if (mhpmcounter_we[i]) begin
-        mhpmcounter_d[i][31: 0] = csr_wdata_int;
-      end else if (mhpmcounterh_we[i]) begin
-        mhpmcounter_d[i][63:32] = csr_wdata_int;
-      end
-    end
-  end
-
-  // Performance monitor registers
-  // Only elaborate flops that are needed from the given MHPMCounterWidth and MHPMCounterNum
-  // parameters
-  for (genvar i = 0; i < 32; i++) begin : g_mhpmcounter
-    // First 3 counters (cycle, time, instret) must always be elaborated
-    if (i < 3 + MHPMCounterNum) begin : g_mhpmcounter_exists
-      // First 3 counters must be 64-bit the rest have parameterisable width
-      localparam int unsigned IMHPMCounterWidth = i < 3 ? 64 : MHPMCounterWidth;
-
-      logic [IMHPMCounterWidth-1:0] mhpmcounter_q;
-
-      always @(posedge clk_i or negedge rst_ni) begin
-        if(~rst_ni) begin
-          mhpmcounter_q <= '0;
-        end else begin
-          mhpmcounter_q <= mhpmcounter_d[i][IMHPMCounterWidth-1:0];
-        end
-      end
-
-      if (IMHPMCounterWidth < 64) begin : g_mhpmcounter_narrow
-        assign mhpmcounter[i][IMHPMCounterWidth-1:0] = mhpmcounter_q;
-        assign mhpmcounter[i][63:IMHPMCounterWidth]  = '0;
-      end else begin : g_mhpmcounter_full
-        assign mhpmcounter[i] = mhpmcounter_q;
-      end
-    end else begin : g_no_mhpmcounter
-      assign mhpmcounter[i] = '0;
-    end
-  end
+  ibex_counters #(
+    .MaxNumCounters(29),
+    .NumCounters(MHPMCounterNum),
+    .CounterWidth(MHPMCounterWidth)
+  ) mcounters_variable_i (
+    .clk_i(clk_i),
+    .rst_ni(rst_ni),
+    .counter_inc_i(mhpmcounter_incr[31:3] & ~mcountinhibit[31:3]),
+    .counterh_we_i(mhpmcounterh_we[31:3]),
+    .counter_we_i(mhpmcounter_we[31:3]),
+    .counter_val_i(csr_wdata_int),
+    .counter_val_o(mhpmcounter[3:31])
+  );
 
   if(MHPMCounterNum < 29) begin : g_mcountinhibit_reduced
     assign mcountinhibit = {{29-MHPMCounterNum{1'b1}}, mcountinhibit_q};
@@ -1026,17 +1035,77 @@ module ibex_cs_registers #(
     assign trigger_match_o      = 'b0;
   end
 
+  // CPU control fields
+  assign cpuctrl_rdata.unused_ctrl = '0;
+  // Cast register write data
+  assign cpuctrl_wdata = CpuCtrl_t'(csr_wdata_int);
+
+  // Generate fixed time execution bit
+  if (DataIndTiming) begin : gen_dit
+    logic data_ind_timing_d, data_ind_timing_q;
+
+    assign data_ind_timing_d = (csr_we_int && (csr_addr == CSR_CPUCTRL)) ?
+      cpuctrl_wdata.data_ind_timing : data_ind_timing_q;
+
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+      if (!rst_ni) begin
+        data_ind_timing_q <= 1'b0; // disabled on reset
+      end else begin
+        data_ind_timing_q <= data_ind_timing_d;
+      end
+    end
+
+    assign cpuctrl_rdata.data_ind_timing = data_ind_timing_q;
+
+  end else begin : gen_no_dit
+    // tieoff for the unused bit
+    logic unused_dit;
+    assign unused_dit = cpuctrl_wdata.data_ind_timing;
+
+    // field will always read as zero if not configured
+    assign cpuctrl_rdata.data_ind_timing = 1'b0;
+  end
+
+  assign data_ind_timing_o = cpuctrl_rdata.data_ind_timing;
+
+  // Generate icache enable bit
+  if (ICache) begin : gen_icache_enable
+    logic icache_enable_d, icache_enable_q;
+
+    // Update the value when cpuctrl register is written
+    assign icache_enable_d = (csr_we_int & (csr_addr == CSR_CPUCTRL)) ?
+        cpuctrl_wdata.icache_enable : icache_enable_q;
+
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+      if (!rst_ni) begin
+        icache_enable_q <= 1'b0; // disabled on reset
+      end else begin
+        icache_enable_q <= icache_enable_d;
+      end
+    end
+
+    assign cpuctrl_rdata.icache_enable = icache_enable_q;
+
+  end else begin : gen_no_icache
+    // tieoff for the unused icen bit
+    logic unused_icen;
+    assign unused_icen = cpuctrl_wdata.icache_enable;
+
+    // icen field will always read as zero if ICache not configured
+    assign cpuctrl_rdata.icache_enable = 1'b0;
+  end
+
+  assign icache_enable_o = cpuctrl_rdata.icache_enable;
+
+  // tieoff for the currently unused bits of cpuctrl
+  logic [31:2] unused_cpuctrl;
+  assign unused_cpuctrl = {cpuctrl_wdata[31:2]};
+
+
   ////////////////
   // Assertions //
   ////////////////
 
-  // Selectors must be known/valid.
-  `ASSERT(IbexCsrOpValid, csr_op_i inside {
-      CSR_OP_READ,
-      CSR_OP_WRITE,
-      CSR_OP_SET,
-      CSR_OP_CLEAR
-      }, clk_i, !rst_ni)
-  `ASSERT_KNOWN(IbexCsrWdataIntKnown, csr_wdata_int, clk_i, !rst_ni)
+  `ASSERT(IbexCsrOpEnRequiresAccess, csr_op_en_i |-> csr_access_i)
 
 endmodule

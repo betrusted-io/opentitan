@@ -19,6 +19,9 @@ package csr_utils_pkg;
   bit        default_csr_blocking        = 1;
   bit        under_reset                 = 0;
 
+  // global paramters for number of csr tests (including memory test)
+  parameter uint NUM_CSR_TESTS = 4;
+
   // csr field struct - hold field specific params
   typedef struct {
     uvm_reg         csr;
@@ -27,8 +30,21 @@ package csr_utils_pkg;
     uint            shift;
   } csr_field_s;
 
+  // csr test types
+  typedef enum bit [NUM_CSR_TESTS-1:0] {
+    CsrInvalidTest    = 4'h0,
+    // elementary test types
+    CsrHwResetTest    = 4'h1,
+    CsrRwTest         = 4'h2,
+    CsrBitBashTest    = 4'h4,
+    CsrAliasingTest   = 4'h8,
+    // combinational test types (combinations of the above), used for exclusion tagging
+    CsrNonInitTests   = 4'he, // all but HwReset test
+    CsrAllTests       = 4'hf  // all tests
+  } csr_test_type_e;
+
   // csr exclusion indications
-  typedef enum bit[2:0] {
+  typedef enum bit [2:0] {
     CsrNoExcl         = 3'b000, // no exclusions
     CsrExclInitCheck  = 3'b001, // exclude csr from init val check
     CsrExclWriteCheck = 3'b010, // exclude csr from write-read check
@@ -214,14 +230,21 @@ package csr_utils_pkg;
                         input uvm_reg_data_t value,
                         input uvm_check_e    check = UVM_CHECK,
                         input uvm_path_e     path = UVM_DEFAULT_PATH,
-                        input  bit           blocking = default_csr_blocking,
+                        input bit            blocking = default_csr_blocking,
                         input uint           timeout_ns = default_timeout_ns,
+                        input bit            predict = 0,
                         input uvm_reg_map    map = null);
     if (blocking) begin
       csr_wr_sub(csr, value, check, path, timeout_ns, map);
+      if (predict) void'(csr.predict(.value(value), .kind(UVM_PREDICT_WRITE)));
     end else begin
       fork
-        csr_wr_sub(csr, value, check, path, timeout_ns, map);
+        begin
+          csr_wr_sub(csr, value, check, path, timeout_ns, map);
+          // predict after csr_wr_sub, to ensure predict after enable register overwrite the locked
+          // registers' access information
+          if (predict) void'(csr.predict(.value(value), .kind(UVM_PREDICT_WRITE)));
+        end
       join_none
       // Add #0 to ensure that this thread starts executing before any subsequent call
       #0;
@@ -341,14 +364,16 @@ package csr_utils_pkg;
 
             increment_outstanding_access();
             csr_or_fld = decode_csr_or_field(ptr);
-            // get mirrored value before the read
+
+            csr_rd(.ptr(ptr), .value(obs), .check(check), .path(path),
+                   .blocking(1), .timeout_ns(timeout_ns), .map(map));
+
+            // get mirrored value after read to make sure the read reg access is updated
             if (csr_or_fld.field != null) begin
               exp = csr_or_fld.field.get_mirrored_value();
             end else begin
               exp = csr_or_fld.csr.get_mirrored_value();
             end
-            csr_rd(.ptr(ptr), .value(obs), .check(check), .path(path),
-                   .blocking(1), .timeout_ns(timeout_ns), .map(map));
             if (compare && !under_reset) begin
               obs = obs & compare_mask;
               exp = (compare_vs_ral ? exp : compare_value) & compare_mask;
@@ -525,12 +550,13 @@ package csr_utils_pkg;
   // Fields could be excluded from writes & reads - This function zeros out the excluded fields
   function automatic uvm_reg_data_t get_mask_excl_fields(uvm_reg csr,
                                                          csr_excl_type_e csr_excl_type,
+                                                         csr_test_type_e csr_test_type,
                                                          csr_excl_item m_csr_excl_item);
     uvm_reg_field flds[$];
     csr.get_fields(flds);
     get_mask_excl_fields = '1;
     foreach (flds[i]) begin
-      if (m_csr_excl_item.is_excl(flds[i], csr_excl_type)) begin
+      if (m_csr_excl_item.is_excl(flds[i], csr_excl_type, csr_test_type)) begin
         csr_field_s fld_params = decode_csr_or_field(flds[i]);
         `uvm_info(msg_id, $sformatf("Skipping field %0s due to %0s exclusion",
                                   flds[i].get_full_name(), csr_excl_type.name()), UVM_MEDIUM)

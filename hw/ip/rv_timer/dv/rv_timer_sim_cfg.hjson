@@ -11,6 +11,9 @@
   // Top level testbench name (sv module).
   tb: tb
 
+  // Simulator used to sign off this block
+  tool: vcs
+
   // Fusesoc core file used for building the file list.
   fusesoc_core: lowrisc:dv:rv_timer_sim:0.1
 
@@ -28,6 +31,9 @@
                 "{proj_root}/hw/dv/data/tests/intr_test.hjson",
                 "{proj_root}/hw/dv/data/tests/tl_access_tests.hjson",
                 "{proj_root}/hw/dv/data/tests/stress_tests.hjson"]
+
+  // Add additional tops for simulation.
+  sim_tops: ["-top rv_timer_bind"]
 
   // Default iterations for all tests - each test entry can override this.
   reseed: 50
@@ -51,12 +57,22 @@
     {
       name: rv_timer_cfg_update_on_fly
       uvm_test_seq: rv_timer_cfg_update_on_fly_vseq
-      run_opts: ["+zero_delays=1", "+test_timeout_ns=10_000_000_000"]
+      // 10ms
+      run_opts: ["+zero_delays=1", "+test_timeout_ns=10000000000"]
+      reseed: 200
     }
 
     {
       name: rv_timer_random_reset
       uvm_test_seq: rv_timer_random_reset_vseq
+    }
+  ]
+
+  // List of regressions.
+  regressions: [
+    {
+      name: sanity
+      tests: ["rv_timer_sanity"]
     }
   ]
 }

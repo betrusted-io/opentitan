@@ -22,6 +22,7 @@ See discussion below on tracking progress.
 
 For professional tooling, the team has chosen [Synopsys' VCS](https://www.synopsys.com/verification/simulation/vcs.html) as the simulator of choice with respect to the tracking of verification completeness and [JasperGold](https://www.cadence.com/content/cadence-www/global/en_US/home/tools/system-design-and-verification/formal-and-static-verification/jasper-gold-verification-platform.html) for FPV.
 Wherever possible we attempt to remain tool-agnostic, but we must choose a simulator as our ground truth for our own confidence of signoff-level assurances.
+Likewise, for FPV, [Synopsys VC Formal](https://www.synopsys.com/verification/static-and-formal-verification/vc-formal.html) is also supported within the same flow, and can be used by those with access to VC Formal licenses. 
 At this time there is also some support for Cadence's Xcelium, for those organizations which have few Synopsys VCS licenses.
 However support is not as mature as for VCS, which remains the tool for signoff.
 Furthermore, as a project we promote other open source verification methodologies - Verilator, Yosys, cocoTB, etc - and work towards a future where these are signoff-grade.
@@ -32,7 +33,7 @@ The discussions on how those are used within the program are carried out in a di
 Verification within the OpenTitan project comes in a variety of completion status levels.
 Some designs are "tapeout ready" while others are still a work in progress.
 Understanding the status of verification is important to gauge the confidence in the design's advertised feature set.
-To that end, we've designated a spectrum of design and verification stages in the  [OpenTitan Hardware Development Stages]({{< relref "doc/project/hw_stages.md" >}}) document.
+To that end, we've designated a spectrum of design and verification stages in the  [OpenTitan Hardware Development Stages]({{< relref "doc/project/development_stages.md" >}}) document.
 It defines the verification stages and references where one can find the current verification status of each of the designs in the repository.
 Splitting the effort in such a way enables the team to pace the development effort and allows the progress to be in lock-step with the design stages.
 The list of tasks that are required to be completed to enable the effort to transition from one stage to the next is defined in the [checklists]({{< relref "doc/project/checklist" >}}) document.
@@ -43,7 +44,7 @@ We will explain some of the key items in those checklists in the remainder of th
 
 DV effort needs to be well documented to not only provide a detailed description of what tests are being planned, but also how the overall effort is strategized and implemented.
 The first is provided by the **testplan** document and the second, by the **DV plan** document.
-The [**project status**]({{< relref "doc/project/hw_stages.md#indicating-stages-and-making-transitions" >}}) document tracks to progression of the effort through the stages.
+The [**project status**]({{< relref "doc/project/development_stages.md#indicating-stages-and-making-transitions" >}}) document tracks to progression of the effort through the stages.
 
 In addition to these documents, a nightly **regression dashboard** tabulating the test and coverage results will provide ability to track progress towards completion of the verification stages.
 
@@ -61,7 +62,7 @@ The complete testplan is parsed into a data structure that serves the following 
 *  Annotate the nightly regression results to allow us to track our progress towards executing the testplan
   *  this feature is not yet available and is [under active development](#pending-work-items)
 
-The [testplanner]({{< relref "util/testplanner/README.md" >}}) tool provides some additional information on the Hjson testplan anatomy and some of the features and constructs supported.
+The [testplanner]({{< relref "util/dvsim/testplanner/README.md" >}}) tool provides some additional information on the Hjson testplan anatomy and some of the features and constructs supported.
 The [build_docs]({{< relref "README.md#documentation" >}}) tool works in conjunction with the `testplanner` tool to enable its insertion into the DV plan as a table.
 
 ### DV Plan
@@ -185,7 +186,7 @@ The chip DV plan, which is currently under active development will explain these
 When progressing through the verification stages, there are key focus areas or testing activities that are perhaps common across all DUTs.
 These are as follows.
 
-### Progressing towards [V1]({{< relref "doc/project/hw_stages#hardware-verification-stages" >}})
+### Progressing towards [V1]({{< relref "doc/project/development_stages#hardware-verification-stages" >}})
 
 These set of tests (not exhaustive) provide the confidence that the design is ready for vertical integration.
 
@@ -202,7 +203,7 @@ This test (or set of tests) is also included as a part of the sanity regression 
 The very first set of real tests validate the SW interface laid out using the regtool.
 These prove that the SW interface is solid and all assumptions in CSRs in terms of field descriptions and their accessibility are correctly captured and there are no address decode bugs.
 
-### Progressing towards [V2]({{< relref "doc/project/hw_stages#hardware-verification-stages" >}})
+### Progressing towards [V2]({{< relref "doc/project/development_stages#hardware-verification-stages" >}})
 
 Bulk of testing in this stage focus on functionally testing the DUT.
 There however are certain categories of tests that may need additional attention.
@@ -249,7 +250,7 @@ To mitigate that, they are constructed with knobs to control the level of constr
 The level of constraints are then slowly eased to allow deeper state space exploration, until all areas of the DUT are satisfactorily stressed.
 Stress tests are ideal for bug hunting and closing coverage.
 
-### Progressing towards [V3]({{< relref "doc/project/hw_stages#hardware-verification-stages" >}})
+### Progressing towards [V3]({{< relref "doc/project/development_stages#hardware-verification-stages" >}})
 
 The main focus of testing at this stage is to meet our [regression](#nightly) and [coverage](#coverage-collection) goals.
 Apart from that, there are cleanup activities to resolve all pending TODO items in the DV code base and fix all compile and run time warnings (if any) thrown by the simulator tools.
@@ -301,7 +302,7 @@ Once the regression tool is developed, it will provide a way to enable these cap
 Collecting, analyzing and reporting coverage with waivers is another requirement to assert 'verification complete'.
 Any gaps in our measured coverage need to be understood and either waived (no need to cover) or closed by additional testing.
 The end goal is to achieve 100% coverage across all applicable coverage metrics.
-This process known as “coverage closure”, is done in close collaboration with the designer(s).
+This process known as "coverage closure", is done in close collaboration with the designer(s).
 Coverage collected from all tests run as a part of the regression is merged into a database for analysis.
 Our primary tool of choice for our coverage closure needs is Synopsys' VCS & Verdi.
 However, the use of other tools / simulators are welcome.
@@ -318,8 +319,8 @@ These metrics are explained briefly below:
 
 *  **Line Coverage**: This metric measures which lines of SystemVerilog RTL code were executed during the course of the simulation.
   This is probably the most intuitive metric to use.
-  Note that “assign” statements are always listed as covered using this metric.
-*  **Toggle Coverage**: This metric measures every logic bit to see if it transitions from 1→ 0 and 0 → 1.
+  Note that "assign" statements are always listed as covered using this metric.
+*  **Toggle Coverage**: This metric measures every logic bit to see if it transitions from 1 &rarr; 0 and 0 &rarr; 1.
   It is very difficult, and not particularly useful to achieve 100% toggle coverage across a design.
   Instead, we focus on closing toggle coverage only on the IO ports of the DUT and IO ports of pre-verified IPs within the DUT.
 *  **FSM state Coverage**: This metric measures which finite state machine states were executed during the course of a simulation.
@@ -344,7 +345,7 @@ Here are the metrics used with a brief explanation:
 
 *  **Assert Coverage**: This metric measures which assertions, cover properties and sequences have been exercised in the course of the simulation.
   Note, an assertion precondition counts as a cover point.
-*  **Covergroup Coverage**: This metric (sometimes called “Testbench Coverage”) measures covergroups during simulation.
+*  **Covergroup Coverage**: This metric (sometimes called "Testbench Coverage") measures covergroups during simulation.
   These are usually coded in the testbench to check that the desired stimulus was generated properly, but can also be embedded in the RTL.
 
 Code coverage can reach 100% but it may not be sufficient to indicate whether all interesting combinations of scenarios were exercised (such as boundary conditions, concurrent scenarios and different CSR fields holding specific combinations of values resulting in the DUT being exercised in interesting ways).
@@ -491,7 +492,7 @@ The goal of this review is to achieve utmost clarity in the planning of the DV e
 The feedback in this review flows both ways - the language in the design specification could be made more precise, or missing items in both, the design specification as well as in the testplan could be identified and added.
 This enables the development stage to progress smoothly.
 
-Subsequently, the intermediate transitions within the verification stages are reviewed within the GitHub pull-request made for updating the checklist and the [project status]({{< relref "doc/project/hw_stages.md#indicating-stages-and-making-transitions" >}}).
+Subsequently, the intermediate transitions within the verification stages are reviewed within the GitHub pull-request made for updating the checklist and the [project status]({{< relref "doc/project/development_stages.md#indicating-stages-and-making-transitions" >}}).
 
 Finally, after the verification effort is complete, there is a final sign-off review to ensure all checklist items are completed satisfactorily without any major exceptions or open issues.
 

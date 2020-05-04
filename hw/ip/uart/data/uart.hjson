@@ -17,7 +17,7 @@
     { name: "rx_watermark"
       desc: "raised if the receive FIFO is past the high-water mark."}
     { name: "tx_empty"
-      desc: "raised if the transmit FIFO has emptied."}
+      desc: "raised if the transmit FIFO has emptied and no transmit is ongoing."}
     { name: "rx_overflow"
       desc: "raised if the receive FIFO has overflowed."}
     { name: "rx_frame_err"
@@ -27,8 +27,8 @@
     { name: "rx_timeout"
       desc: '''
           raised if RX FIFO has characters remaining in the FIFO without being
-	  retrieved for the programmed time period.
-	  '''
+          retrieved for the programmed time period.
+          '''
     }
     { name: "rx_parity_err"
       desc: "raised if the receiver has detected a parity error."}
@@ -133,7 +133,7 @@
         }
         { bits: "3"
           name: "TXIDLE"
-          desc: "TX is idle"
+          desc: "TX FIFO is empty and all bits have been transmitted"
           resval: "1"
         }
         { bits: "4"
@@ -157,6 +157,8 @@
       fields: [
         { bits: "7:0" }
       ]
+      tags: [// read wdata when fifo is empty, dut may return unknown data
+             "excl:CsrAllTests:CsrExclCheck"]
     }
     { name: "WDATA",
       desc: "UART write data",
@@ -166,6 +168,8 @@
       fields: [
         { bits: "7:0" }
       ]
+      tags: [// don't write to wdata - it affects several other csrs
+             "excl:CsrNonInitTests:CsrExclWrite"]
     }
     { name: "FIFO_CTRL",
       desc: "UART FIFO control register",
@@ -221,7 +225,7 @@
           enum: [
             { value: "0",
               name: "txlvl1",
-              desc: "1 character"
+              desc: "2 characters"
             },
             { value: "1",
               name: "txlvl4",
@@ -262,7 +266,10 @@
       fields: [
         { bits: "0",
           name: "TXEN",
-          desc: "Enable TX pin override control"
+          desc: "Enable TX pin override control",
+          tags: [// writes to ovrd.txen causes tx output to be forced to ovrd.txval
+                 // causing protocol violation
+                 "excl:CsrAllTests:CsrExclWrite"]
         }
         { bits: "1",
           name: "TXVAL",
@@ -281,6 +288,8 @@
           desc: '''
                 Last 16 oversampled values of RX. Most recent bit is bit 0, oldest 15.
                 '''
+          tags: [// UART oversampled values are updated by design according to setting and pin RX
+                 "excl:CsrNonInitTests:CsrExclCheck"]
         }
       ]
     }

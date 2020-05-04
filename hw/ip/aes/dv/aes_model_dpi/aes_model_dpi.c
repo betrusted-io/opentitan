@@ -2,9 +2,10 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <cstring>
+#include <string.h>
 
 #include "aes.h"
 #include "crypto.h"
@@ -12,9 +13,11 @@
 
 #include "aes_model_dpi.h"
 
-void aes_crypt_dpi(const unsigned char impl_i, const unsigned char mode_i,
-                   const svBitVecVal *key_len_i, const svBitVecVal *key_i,
-                   const svBitVecVal *data_i, svBitVecVal *data_o) {
+void c_dpi_aes_crypt_block(const unsigned char impl_i, const unsigned char op_i,
+                           const svBitVecVal *mode_i, const svBitVecVal *iv_i,
+                           const svBitVecVal *key_len_i,
+                           const svBitVecVal *key_i, const svBitVecVal *data_i,
+                           svBitVecVal *data_o) {
   // get input data from simulator
   unsigned char *key = aes_key_get(key_i);
   unsigned char *ref_in = aes_data_get(data_i);
@@ -29,73 +32,168 @@ void aes_crypt_dpi(const unsigned char impl_i, const unsigned char mode_i,
     key_len = 32;
   }
 
-  // We encrypt/decrypt one 16B block of data
-  int num_elem_ref_out = 16;
-  if (impl_i) {
-    // OpenSSL/BoringSSL require space for one spare block
-    num_elem_ref_out += 16;
+  crypto_mode_t mode = (crypto_mode_t)*mode_i;
+
+  // Modes other than ECB require an IV from the simulator.
+  unsigned char *iv;
+  if (mode != kCryptoAesEcb) {
+    iv = aes_data_get(iv_i);
+  } else {
+    iv = (unsigned char *)calloc(16, sizeof(unsigned char));
+    assert(iv);
   }
 
   // allocate memory
-  unsigned char *ref_out =
-      (unsigned char *)malloc(num_elem_ref_out * sizeof(unsigned char));
-  if (!ref_out) {
-    printf("ERROR: malloc() for aes_crypt_dpi failed");
-    return;
-  }
+  unsigned char *ref_out = (unsigned char *)malloc(16 * sizeof(unsigned char));
+  assert(ref_out);
 
   if (impl_i == 0) {
-    if (!mode_i) {
-      aes_encrypt_block(ref_in, key, key_len, ref_out);
-    } else {
-      aes_decrypt_block(ref_in, key, key_len, ref_out);
+    // The C model does ECB only. We "emulate" other modes here.
+    unsigned char data_in[16];
+    unsigned char data_out[16];
+
+    if (mode == kCryptoAesCbc) {
+      if (!op_i) {
+        // data_in = ref_in XOR iv (or previous data_out)
+        for (int i = 0; i < 16; ++i) {
+          data_in[i] = ref_in[i] ^ iv[i];
+        }
+        aes_encrypt_block(data_in, key, key_len, ref_out);
+      } else {
+        aes_decrypt_block(ref_in, key, key_len, data_out);
+        // ref_out = data_out XOR iv (or previous data_out)
+        for (int i = 0; i < 16; ++i) {
+          ref_out[i] = data_out[i] ^ iv[i];
+        }
+      }
+    } else if (mode == kCryptoAesCtr) {
+      // data_in = counter value
+      for (int i = 0; i < 16; ++i) {
+        data_in[i] = iv[i];
+      }
+      aes_encrypt_block(data_in, key, key_len, data_out);
+      for (int i = 0; i < 16; ++i) {
+        ref_out[i] = data_out[i] ^ ref_in[i];
+      }
+    } else {  // ECB
+      if (!op_i) {
+        aes_encrypt_block(ref_in, key, key_len, ref_out);
+      } else {
+        aes_decrypt_block(ref_in, key, key_len, ref_out);
+      }
     }
   } else {  // OpenSSL/BoringSSL
-    unsigned char iv[16];
-    memset(iv, 0, 16);
-
-    // always do an encrypt first as crypto_decrypt() requires
-    // the final spare block produced by crypto_encrypt()
-    int len = crypto_encrypt(ref_out, iv, ref_in, 16, key, key_len);
-
-    if (mode_i) {
-      // prepare
-      unsigned char *ref_in_crypto =
-          (unsigned char *)malloc(num_elem_ref_out * sizeof(unsigned char));
-      if (!ref_in_crypto) {
-        printf("ERROR: malloc() for aes_crypt_dpi failed");
-        return;
-      }
-      memcpy((void *)&ref_in_crypto[0], (const void *)&ref_in[0],
-             (size_t)(len - 16));
-      memcpy((void *)&ref_in_crypto[len - 16], (const void *)&ref_out[len - 16],
-             (size_t)16);
-
-      // do the decrypt
-      crypto_decrypt(ref_out, iv, ref_in_crypto, len, key, key_len);
-
-      // cleanup
-      free(ref_in_crypto);
+    if (!op_i) {
+      crypto_encrypt(ref_out, iv, ref_in, 16, key, key_len, mode);
+    } else {
+      crypto_decrypt(ref_out, iv, ref_in, 16, key, key_len, mode);
     }
   }
 
-  // write output data back to simulator
+  // write output data back to simulator, free ref_out
   aes_data_put(data_o, ref_out);
 
   // free memory
+  free(iv);
   free(key);
   free(ref_in);
 
   return;
 }
 
-void aes_sub_bytes_dpi(const unsigned char mode_i, const svBitVecVal *data_i,
-                       svBitVecVal *data_o) {
+void c_dpi_aes_crypt_message(unsigned char impl_i, unsigned char op_i,
+                             const svBitVecVal *mode_i, const svBitVecVal *iv_i,
+                             const svBitVecVal *key_len_i,
+                             const svBitVecVal *key_i,
+                             const svOpenArrayHandle data_i,
+                             svOpenArrayHandle data_o) {
+  if (impl_i == 0) {
+    // The C model is currently not supported.
+    printf(
+        "ERROR: c_dpi_aes_crypt_message() currently supports OpenSSL/BoringSSL "
+        "only\n");
+    return;
+  }
+
+  // Get key from simulator.
+  unsigned char *key = aes_key_get(key_i);
+
+  // key_len_i is one-hot encoded.
+  int key_len;
+  if (*key_len_i == 0x1) {
+    key_len = 16;
+  } else if (*key_len_i == 0x2) {
+    key_len = 24;
+  } else {  // 0x4
+    key_len = 32;
+  }
+
+  crypto_mode_t mode = (crypto_mode_t)*mode_i;
+
+  // Modes other than ECB require an IV from the simulator.
+  unsigned char *iv = (unsigned char *)malloc(16 * sizeof(unsigned char));
+  assert(iv);
+  if (mode != kCryptoAesEcb) {
+    // iv_i is a 1D array of words (4x32bit), but we need 16 bytes.
+    svBitVecVal value;
+    for (int i = 0; i < 4; ++i) {
+      value = iv_i[i];
+      iv[4 * i + 0] = (unsigned char)(value >> 0);
+      iv[4 * i + 1] = (unsigned char)(value >> 8);
+      iv[4 * i + 2] = (unsigned char)(value >> 16);
+      iv[4 * i + 3] = (unsigned char)(value >> 24);
+    }
+  } else {
+    memset(iv, 0, 16);
+  }
+
+  // Get message length.
+  int data_len = svSize(data_i, 1);
+
+  // Get input data from simulator.
+  unsigned char *ref_in = aes_data_unpacked_get(data_i);
+
+  // Allocate output buffer.
+  unsigned char *ref_out =
+      (unsigned char *)malloc(data_len * sizeof(unsigned char));
+  assert(ref_out);
+
+  // OpenSSL/BoringSSL
+  if ((int)data_len % 16) {
+    printf(
+        "ERROR: Message length must be a multiple of 16 bytes (the block "
+        "size).\n");
+    return;
+  }
+
+  if (impl_i == 0) {
+    // The C model is currently not supported.
+    printf(
+        "ERROR: c_dpi_aes_crypt_message() currently supports OpenSSL/BoringSSL "
+        "only\n");
+  } else {  // OpenSSL/BoringSSL
+    if (!op_i) {
+      crypto_encrypt(ref_out, iv, ref_in, data_len, key, key_len, mode);
+    } else {
+      crypto_decrypt(ref_out, iv, ref_in, data_len, key, key_len, mode);
+    }
+  }
+
+  // Write output data back to simulator, free ref_out.
+  aes_data_unpacked_put(data_o, ref_out);
+
+  // Free memory.
+  free(iv);
+  free(key);
+}
+
+void c_dpi_aes_sub_bytes(const unsigned char op_i, const svBitVecVal *data_i,
+                         svBitVecVal *data_o) {
   // get input data from simulator
   unsigned char *data = aes_data_get(data_i);
 
   // perform sub bytes
-  if (!mode_i) {
+  if (!op_i) {
     aes_sub_bytes(data);
   } else {
     aes_inv_sub_bytes(data);
@@ -107,13 +205,13 @@ void aes_sub_bytes_dpi(const unsigned char mode_i, const svBitVecVal *data_i,
   return;
 }
 
-void aes_shift_rows_dpi(const unsigned char mode_i, const svBitVecVal *data_i,
-                        svBitVecVal *data_o) {
+void c_dpi_aes_shift_rows(const unsigned char op_i, const svBitVecVal *data_i,
+                          svBitVecVal *data_o) {
   // get input data from simulator
   unsigned char *data = aes_data_get(data_i);
 
   // perform shift rows
-  if (!mode_i) {
+  if (!op_i) {
     aes_shift_rows(data);
   } else {
     aes_inv_shift_rows(data);
@@ -125,13 +223,13 @@ void aes_shift_rows_dpi(const unsigned char mode_i, const svBitVecVal *data_i,
   return;
 }
 
-void aes_mix_columns_dpi(const unsigned char mode_i, const svBitVecVal *data_i,
-                         svBitVecVal *data_o) {
+void c_dpi_aes_mix_columns(const unsigned char op_i, const svBitVecVal *data_i,
+                           svBitVecVal *data_o) {
   // get input data from simulator
   unsigned char *data = aes_data_get(data_i);
 
   // perform mix columns
-  if (!mode_i) {
+  if (!op_i) {
     aes_mix_columns(data);
   } else {
     aes_inv_mix_columns(data);
@@ -143,10 +241,10 @@ void aes_mix_columns_dpi(const unsigned char mode_i, const svBitVecVal *data_i,
   return;
 }
 
-void aes_key_expand_dpi(const unsigned char mode_i, const svBitVecVal *rcon_i,
-                        const svBitVecVal *round_i,
-                        const svBitVecVal *key_len_i, const svBitVecVal *key_i,
-                        svBitVecVal *key_o) {
+void c_dpi_aes_key_expand(const unsigned char op_i, const svBitVecVal *rcon_i,
+                          const svBitVecVal *round_i,
+                          const svBitVecVal *key_len_i,
+                          const svBitVecVal *key_i, svBitVecVal *key_o) {
   unsigned char round_key[16];  // just used by model
 
   // get input data
@@ -165,7 +263,7 @@ void aes_key_expand_dpi(const unsigned char mode_i, const svBitVecVal *rcon_i,
   }
 
   // perform key expand
-  if (!mode_i) {
+  if (!op_i) {
     aes_rcon_prev(&rcon, key_len);
     aes_key_expand(round_key, key, key_len, &rcon, rnd);
   } else {
@@ -185,10 +283,7 @@ unsigned char *aes_data_get(const svBitVecVal *data_i) {
 
   // alloc data buffer
   data = (unsigned char *)malloc(16 * sizeof(unsigned char));
-  if (!data) {
-    printf("ERROR: malloc() for aes_data_get failed");
-    return 0;
-  }
+  assert(data);
 
   // get data from simulator, convert from 2D to 1D
   for (int i = 0; i < 4; i++) {
@@ -227,10 +322,7 @@ unsigned char *aes_data_unpacked_get(const svOpenArrayHandle data_i) {
   // alloc data buffer
   len = svSize(data_i, 1);
   data = (unsigned char *)malloc(len * sizeof(unsigned char));
-  if (!data) {
-    printf("ERROR: malloc() for aes_data_unpacked_get failed");
-    return 0;
-  }
+  assert(data);
 
   // get data from simulator
   for (int i = 0; i < len; i++) {
@@ -267,10 +359,7 @@ unsigned char *aes_key_get(const svBitVecVal *key_i) {
 
   // alloc data buffer
   key = (unsigned char *)malloc(32 * sizeof(unsigned char));
-  if (!key) {
-    printf("ERROR: malloc() for aes_key_get failed");
-    return 0;
-  }
+  assert(key);
 
   // get data from simulator
   for (int i = 0; i < 8; i++) {

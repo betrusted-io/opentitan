@@ -6,11 +6,13 @@ Ibex User Manual
    :caption: Contents:
 
    introduction
+   system_requirements
    getting_started
    integration
    pipeline_details
    instruction_fetch
    instruction_decode_execute
+   icache
    load_store_unit
    register_file
    cs_registers
@@ -22,6 +24,7 @@ Ibex User Manual
    rvfi
    verification
    examples
+   concierge
 
 
 .. toctree::

@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0, see LICENSE for details.
 // SPDX-License-Identifier: Apache-2.0
 
-class chip_base_test extends dv_base_test #(
+class chip_base_test extends cip_base_test #(
     .ENV_T(chip_env),
     .CFG_T(chip_env_cfg)
   );
@@ -20,7 +20,19 @@ class chip_base_test extends dv_base_test #(
     super.build_phase(phase);
     // knob to en/dis stubbing cpu (disabled by default)
     void'($value$plusargs("stub_cpu=%0b", cfg.stub_cpu));
-  endfunction : build_phase
+    // Set tl_agent's is_active bit based on the retrieved stub_cpu value.
+    cfg.m_tl_agent_cfg.is_active = cfg.stub_cpu;
 
+    // knob to enable logging via uart
+    void'($value$plusargs("en_uart_logger=%0b", cfg.en_uart_logger));
+    cfg.m_uart_agent_cfg.en_logger = cfg.en_uart_logger;
+    cfg.m_uart_agent_cfg.logger_msg_id  = "SW_LOGS";
+
+    // Set the sw_test_timeout_ns knob from plusarg if available.
+    void'($value$plusargs("sw_test_timeout_ns=%0d", cfg.sw_test_timeout_ns));
+
+    // override tl_seq_item to apply constraint on source_id
+    tl_seq_item::type_id::set_type_override(chip_tl_seq_item::get_type());
+  endfunction : build_phase
 
 endclass : chip_base_test

@@ -67,7 +67,7 @@ module tb;
   assign spi_if.miso  = miso_en ? miso_o : 1'bz;
 
   assign interrupts[RxFifoFull]      = intr_rxf;
-  assign interrupts[RxFifoGtLevel]   = intr_rxlvl;
+  assign interrupts[RxFifoGeLevel]   = intr_rxlvl;
   assign interrupts[TxFifoLtLevel]   = intr_txlvl;
   assign interrupts[RxFwModeErr]     = intr_rxerr;
   assign interrupts[RxFifoOverflow]  = intr_rxoverflow;
@@ -79,8 +79,6 @@ module tb;
     uvm_config_db#(virtual clk_rst_if)::set(null, "*.env", "clk_rst_vif", clk_rst_if);
     uvm_config_db#(intr_vif)::set(null, "*.env", "intr_vif", intr_if);
     uvm_config_db#(devmode_vif)::set(null, "*.env", "devmode_vif", devmode_if);
-    uvm_config_db#(tlul_assert_ctrl_vif)::set(null, "*.env", "tlul_assert_ctrl_vif",
-        dut.tlul_assert_device.tlul_assert_ctrl_if);
     uvm_config_db#(virtual tl_if)::set(null, "*.env.m_tl_agent*", "vif", tl_if);
     uvm_config_db#(virtual spi_if)::set(null, "*.env.m_spi_agent*", "vif", spi_if);
     $timeformat(-12, 0, " ps", 12);

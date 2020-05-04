@@ -12,11 +12,15 @@ num_mio_inout = sum([x["width"] if "width" in x else 1 for x in top["pinmux"]["i
 
 num_dio = sum([x["width"] if "width" in x else 1 for x in top["pinmux"]["dio"]])
 
+num_im = sum([x["width"] if "width" in x else 1 for x in top["inter_signal"]["external"]])
+
 max_miolength = max([len(x["name"]) for x in top["pinmux"]["inputs"] + top["pinmux"]["outputs"] + top["pinmux"]["inouts"]])
 max_diolength = max([len(x["name"]) for x in top["pinmux"]["dio"]])
 
 max_sigwidth = max([x["width"] if "width" in x else 1 for x in top["pinmux"]["inputs"] + top["pinmux"]["outputs"] +  top["pinmux"]["inouts"]])
 max_sigwidth = len("{}".format(max_sigwidth))
+
+clks_attr = top['clocks']
 
 %>\
 module top_${top["name"]} #(
@@ -25,6 +29,12 @@ module top_${top["name"]} #(
   // Clock and Reset
   input               clk_i,
   input               rst_ni,
+
+  // Fixed clock
+  input               clk_fixed_i,
+
+  // USB clock
+  input               clk_usb_48mhz_i,
 
   // JTAG interface
   input               jtag_tck_i,
@@ -52,6 +62,13 @@ module top_${top["name"]} #(
     % endif
   % endfor
 % endif
+% if num_im != 0:
+
+  // Inter-module Signal External type
+  % for sig in top["inter_signal"]["external"]:
+  ${"input " if sig["direction"] == "in" else "output"} ${lib.im_defname(sig)} ${lib.bitarray(sig["width"],1)} ${sig["signame"]},
+  % endfor
+% endif
 
   input               scanmode_i  // 1 for Scan
 );
@@ -61,7 +78,7 @@ module top_${top["name"]} #(
   // own IDs.
   // Field structure as defined in the IEEE 1149.1 (JTAG) specification,
   // section 12.1.1.
-  localparam JTAG_IDCODE = {
+  localparam logic [31:0] JTAG_IDCODE = {
     4'h0,     // Version
     16'h4F54, // Part Number: "OT"
     11'h426,  // Manufacturer Identity: Google
@@ -71,7 +88,6 @@ module top_${top["name"]} #(
   import tlul_pkg::*;
   import top_pkg::*;
   import tl_main_pkg::*;
-  import flash_ctrl_pkg::*;
 
   tl_h2d_t  tl_corei_h_h2d;
   tl_d2h_t  tl_corei_h_d2h;
@@ -118,14 +134,11 @@ module top_${top["name"]} #(
   % endfor
 % endfor
 
-  //reset wires declaration
-% for reset in top['resets']:
-  logic ${reset['name']}_rst_n;
-% endfor
-
   //clock wires declaration
-% for clock in top['clocks']:
-  logic ${clock['name']}_clk;
+% for clock_group in clks_attr['groups']:
+  % for k in clock_group['clocks']:
+  logic ${k};
+  % endfor
 % endfor
 
   // Signals
@@ -156,7 +169,9 @@ module top_${top["name"]} #(
 
 
 <%
-  interrupt_num = sum([x["width"] if "width" in x else 1 for x in top["interrupt"]])
+  # Interrupt source 0 is tied to 0 to conform RISC-V PLIC spec.
+  # So, total number of interrupts are the number of entries in the list + 1
+  interrupt_num = sum([x["width"] if "width" in x else 1 for x in top["interrupt"]]) + 1
 %>\
   logic [${interrupt_num-1}:0]  intr_vector;
   // Interrupt source list
@@ -171,21 +186,21 @@ module top_${top["name"]} #(
 % endfor
 
 
-  <% add_spaces = " " * len(str((interrupt_num).bit_length()-1)) %>
+<% add_spaces = " " * len(str((interrupt_num-1).bit_length()-1)) %>
   logic [0:0]${add_spaces}irq_plic;
   logic [0:0]${add_spaces}msip;
-  logic [${(interrupt_num).bit_length()-1}:0] irq_id[1];
-  logic [${(interrupt_num).bit_length()-1}:0] unused_irq_id[1];
+  logic [${(interrupt_num-1).bit_length()-1}:0] irq_id[1];
+  logic [${(interrupt_num-1).bit_length()-1}:0] unused_irq_id[1];
 
   // this avoids lint errors
   assign unused_irq_id = irq_id;
 
   // Alert list
-  prim_pkg::alert_tx_t [alert_pkg::NAlerts-1:0]  alert_tx;
-  prim_pkg::alert_rx_t [alert_pkg::NAlerts-1:0]  alert_rx;
+  prim_alert_pkg::alert_tx_t [alert_pkg::NAlerts-1:0]  alert_tx;
+  prim_alert_pkg::alert_rx_t [alert_pkg::NAlerts-1:0]  alert_rx;
   // Escalation outputs
-  prim_pkg::esc_tx_t [alert_pkg::N_ESC_SEV-1:0]  esc_tx;
-  prim_pkg::esc_rx_t [alert_pkg::N_ESC_SEV-1:0]  esc_rx;
+  prim_esc_pkg::esc_tx_t [alert_pkg::N_ESC_SEV-1:0]  esc_tx;
+  prim_esc_pkg::esc_rx_t [alert_pkg::N_ESC_SEV-1:0]  esc_rx;
 
 % if not top["alert"]:
   for (genvar k = 0; k < alert_pkg::NAlerts; k++) begin : gen_alert_tie_off
@@ -195,46 +210,48 @@ module top_${top["name"]} #(
   end
 % endif
 
-  // clock assignments
-% for clock in top['clocks']:
-  assign ${clock['name']}_clk = clk_i;
+## Inter-module Definitions
+% if len(top["inter_signal"]["definitions"]) >= 1:
+  // define inter-module signals
+% endif
+% for sig in top["inter_signal"]["definitions"]:
+  ${lib.im_defname(sig)} ${lib.bitarray(sig["width"],1)} ${sig["signame"]};
+% endfor
+
+  // Clock assignments
+  // These assignments are temporary until the creation of the clock controller
+% for clock_group in clks_attr['groups']:
+  % for k,v in clock_group['clocks'].items():
+  assign ${k} = ${lib.get_clk_name(v)};
+  % endfor
 % endfor
 
   // Non-debug module reset == reset for everything except for the debug module
   logic ndmreset_req;
-
-  // root resets
-  // TODO: lc_rst_n is not the true root reset.  It will be differentiated once the
-  //       the reset controller logic is present
-  assign lc_rst_n = rst_ni;
-  assign sys_rst_n = (scanmode_i) ? lc_rst_n : ~ndmreset_req & lc_rst_n;
-
-  //non-root reset assignments
-% for reset in top['resets']:
-  % if reset['type'] in ['leaf']:
-  assign ${reset['name']}_rst_n = ${reset['root']}_rst_n;
-  % endif
-% endfor
 
   // debug request from rv_dm to core
   logic debug_req;
 
   // processor core
   rv_core_ibex #(
-    .PMPEnable           (0),
-    .PMPGranularity      (0),
-    .PMPNumRegions       (4),
-    .MHPMCounterNum      (8),
-    .MHPMCounterWidth    (40),
-    .RV32E               (0),
-    .RV32M               (1),
-    .DmHaltAddr          (ADDR_SPACE_DEBUG_MEM + dm::HaltAddress),
-    .DmExceptionAddr     (ADDR_SPACE_DEBUG_MEM + dm::ExceptionAddress),
-    .PipeLine            (IbexPipeLine)
-  ) core (
+    .PMPEnable                (0),
+    .PMPGranularity           (0),
+    .PMPNumRegions            (4),
+    .MHPMCounterNum           (8),
+    .MHPMCounterWidth         (40),
+    .RV32E                    (0),
+    .RV32M                    (1),
+    .BranchTargetALU          (1),
+    .WritebackStage           (1),
+    .MultiplierImplementation ("single-cycle"),
+    .DbgTriggerEn             (1),
+    .DmHaltAddr               (ADDR_SPACE_DEBUG_MEM + dm::HaltAddress),
+    .DmExceptionAddr          (ADDR_SPACE_DEBUG_MEM + dm::ExceptionAddress),
+    .PipeLine                 (IbexPipeLine)
+  ) u_rv_core_ibex (
     // clock and reset
-    .clk_i                (main_clk),
-    .rst_ni               (sys_rst_n),
+    .clk_i                (clk_proc_main),
+    .rst_ni               (${top["reset_paths"]["sys"]}),
     .test_en_i            (1'b0),
     // static pinning
     .hart_id_i            (32'b0),
@@ -254,7 +271,7 @@ module top_${top["name"]} #(
     .debug_req_i          (debug_req),
     // CPU control signals
     .fetch_enable_i       (1'b1),
-    .core_sleep_o         ()
+    .core_sleep_o         (pwrmgr_pwr_cpu.core_sleeping)
   );
 
   // Debug Module (RISC-V Debug Spec 0.13)
@@ -264,8 +281,8 @@ module top_${top["name"]} #(
     .NrHarts     (1),
     .IdcodeValue (JTAG_IDCODE)
   ) u_dm_top (
-    .clk_i         (main_clk),
-    .rst_ni        (lc_rst_n),
+    .clk_i         (clk_proc_main),
+    .rst_ni        (${top["reset_paths"]["lc"]}),
     .testmode_i    (1'b0),
     .ndmreset_o    (ndmreset_req),
     .dmactive_o    (),
@@ -288,6 +305,9 @@ module top_${top["name"]} #(
     .td_o             (jtag_td_o),
     .tdo_oe_o         (       )
   );
+
+  assign rstmgr_cpu.ndmreset_req = ndmreset_req;
+  assign rstmgr_cpu.rst_cpu_n = ${top["reset_paths"]["sys"]};
 
 ## Memory Instantiation
 % for m in top["memory"]:
@@ -315,13 +335,13 @@ module top_${top["name"]} #(
   tlul_adapter_sram #(
     .SramAw(${addr_width}),
     .SramDw(${data_width}),
-    .Outstanding(1)
-  ) tl_adapter_${m["name"]} (
+    .Outstanding(2)
+  ) u_tl_adapter_${m["name"]} (
     % for key in clocks:
-    .${key}   (${clocks[key]}_clk),
+    .${key}   (${clocks[key]}),
     % endfor
     % for key in resets:
-    .${key}   (${resets[key]}_rst_n),
+    .${key}   (${top["reset_paths"][resets[key]]}),
     % endfor
     .tl_i     (tl_${m["name"]}_d_h2d),
     .tl_o     (tl_${m["name"]}_d_d2h),
@@ -344,10 +364,10 @@ module top_${top["name"]} #(
     .DataBitsPerMask(${int(data_width/4)})
   ) u_ram1p_${m["name"]} (
     % for key in clocks:
-    .${key}   (${clocks[key]}_clk),
+    .${key}   (${clocks[key]}),
     % endfor
     % for key in resets:
-    .${key}   (${resets[key]}_rst_n),
+    .${key}   (${top["reset_paths"][resets[key]]}),
     % endfor
 
     .req_i    (${m["name"]}_req),
@@ -375,14 +395,14 @@ module top_${top["name"]} #(
   tlul_adapter_sram #(
     .SramAw(${addr_width}),
     .SramDw(${data_width}),
-    .Outstanding(1),
+    .Outstanding(2),
     .ErrOnWrite(1)
-  ) tl_adapter_${m["name"]} (
+  ) u_tl_adapter_${m["name"]} (
     % for key in clocks:
-    .${key}   (${clocks[key]}_clk),
+    .${key}   (${clocks[key]}),
     % endfor
     % for key in resets:
-    .${key}   (${resets[key]}_rst_n),
+    .${key}   (${top["reset_paths"][resets[key]]}),
     % endfor
 
     .tl_i     (tl_${m["name"]}_d_h2d),
@@ -405,10 +425,10 @@ module top_${top["name"]} #(
     .Depth(${rom_depth})
   ) u_rom_${m["name"]} (
     % for key in clocks:
-    .${key}   (${clocks[key]}_clk),
+    .${key}   (${clocks[key]}),
     % endfor
     % for key in resets:
-    .${key}   (${resets[key]}_rst_n),
+    .${key}   (${top["reset_paths"][resets[key]]}),
     % endfor
     .cs_i     (${m["name"]}_req),
     .addr_i   (${m["name"]}_addr),
@@ -418,29 +438,25 @@ module top_${top["name"]} #(
 
   % elif m["type"] == "eflash":
 
-  // flash controller to eflash communication
-  flash_c2m_t flash_c2m;
-  flash_m2c_t flash_m2c;
-
   // host to flash communication
   logic flash_host_req;
   logic flash_host_req_rdy;
   logic flash_host_req_done;
-  logic [FLASH_DW-1:0] flash_host_rdata;
-  logic [FLASH_AW-1:0] flash_host_addr;
+  logic [flash_ctrl_pkg::BusWidth-1:0] flash_host_rdata;
+  logic [flash_ctrl_pkg::AddrW-1:0] flash_host_addr;
 
   tlul_adapter_sram #(
-    .SramAw(FLASH_AW),
-    .SramDw(FLASH_DW),
-    .Outstanding(1),
+    .SramAw(flash_ctrl_pkg::AddrW),
+    .SramDw(flash_ctrl_pkg::BusWidth),
+    .Outstanding(2),
     .ByteAccess(0),
     .ErrOnWrite(1)
-  ) tl_adapter_${m["name"]} (
+  ) u_tl_adapter_${m["name"]} (
     % for key in clocks:
-    .${key}   (${clocks[key]}_clk),
+    .${key}   (${clocks[key]}),
     % endfor
     % for key in resets:
-    .${key}   (${resets[key]}_rst_n),
+    .${key}   (${top["reset_paths"][resets[key]]}),
     % endfor
 
     .tl_i       (tl_${m["name"]}_d_h2d),
@@ -457,25 +473,20 @@ module top_${top["name"]} #(
     .rerror_i (2'b00)
   );
 
-  flash_phy #(
-    .NumBanks(FLASH_BANKS),
-    .PagesPerBank(FLASH_PAGES_PER_BANK),
-    .WordsPerPage(FLASH_WORDS_PER_PAGE),
-    .DataWidth(${data_width})
-  ) u_flash_${m["name"]} (
+  flash_phy u_flash_${m["name"]} (
     % for key in clocks:
-    .${key}   (${clocks[key]}_clk),
+    .${key}   (${clocks[key]}),
     % endfor
     % for key in resets:
-    .${key}   (${resets[key]}_rst_n),
+    .${key}   (${top["reset_paths"][resets[key]]}),
     % endfor
     .host_req_i      (flash_host_req),
     .host_addr_i     (flash_host_addr),
     .host_req_rdy_o  (flash_host_req_rdy),
     .host_req_done_o (flash_host_req_done),
     .host_rdata_o    (flash_host_rdata),
-    .flash_ctrl_i    (flash_c2m),
-    .flash_ctrl_o    (flash_m2c)
+    .flash_ctrl_i    (${m["inter_signal_list"][0]["top_signame"]}_req),
+    .flash_ctrl_o    (${m["inter_signal_list"][0]["top_signame"]}_rsp)
   );
 
   % else:
@@ -509,9 +520,9 @@ else:
     .${k}(${v | lib.parameterize}),
         % endif
     % endfor
-  ) ${m["name"]} (
+  ) u_${m["name"]} (
   % else:
-  ${m["type"]} ${m["name"]} (
+  ${m["type"]} u_${m["name"]} (
   % endif
     % if not "bus_host" in m or m["bus_host"] in ["none", ""]:
       .tl_i (tl_${m["name"]}_d_h2d),
@@ -545,21 +556,31 @@ else:
       .${lib.ljust("intr_"+intr["name"]+"_o",max_intrwidth+7)} (intr_${m["name"]}_${intr["name"]}),
     % endfor
     % if m["alert_list"]:
-      <%
-      w = sum([x["width"] if "width" in x else 1 for x in m["alert_list"]])
-      slice = str(alert_idx+w-1) + ":" + str(alert_idx)
-      %>
+<%
+w = sum([x["width"] if "width" in x else 1 for x in m["alert_list"]])
+slice = str(alert_idx+w-1) + ":" + str(alert_idx)
+%>
       % for alert in m["alert_list"] if "alert_list" in m else []:
-      // [${alert_idx}]: ${alert["name"]} <% alert_idx += 1 %>
+      // [${alert_idx}]: ${alert["name"]}<% alert_idx += 1 %>
       % endfor
       .alert_tx_o  ( alert_tx[${slice}] ),
       .alert_rx_i  ( alert_rx[${slice}] ),
     % endif
     ## TODO: Inter-module Connection
-    % if m["type"] == "flash_ctrl":
+    % if "inter_signal_list" in m:
 
-      .flash_o(flash_c2m),
-      .flash_i(flash_m2c),
+      // Inter-module signals
+      % for sig in m["inter_signal_list"]:
+        ## TODO: handle below condition in lib.py
+        % if sig["type"] == "req_rsp":
+      .${lib.im_portname(sig,"req")}(${lib.im_netname(sig, "req")}),
+      .${lib.im_portname(sig,"rsp")}(${lib.im_netname(sig, "rsp")}),
+        % elif sig["type"] == "uni":
+          ## TODO: Broadcast type
+          ## TODO: default for logic type
+      .${lib.im_portname(sig)}(${lib.im_netname(sig)}),
+        % endif
+      % endfor
     % endif
     % if m["type"] == "rv_plic":
 
@@ -600,10 +621,10 @@ else:
     % endif
 
     % for k, v in m["clock_connections"].items():
-      .${k} (${v}_clk),
+      .${k} (${v}),
     % endfor
     % for k, v in m["reset_connections"].items():
-      .${k} (${v}_rst_n)${"," if not loop.last else ""}
+      .${k} (${top["reset_paths"][v]})${"," if not loop.last else ""}
     % endfor
   );
 
@@ -611,8 +632,9 @@ else:
   // interrupt assignments
   assign intr_vector = {
   % for intr in top["interrupt"][::-1]:
-      intr_${intr["name"]}${"," if not loop.last else ""}
+      intr_${intr["name"]},
   % endfor
+      1'b 0 // For ID 0.
   };
 
   // TL-UL Crossbar
@@ -622,10 +644,10 @@ else:
 %>\
   xbar_${xbar["name"]} u_xbar_${xbar["name"]} (
   % for k, v in xbar["clock_connections"].items():
-    .${k} (${v}_clk),
+    .${k} (${v}),
   % endfor
   % for k, v in xbar["reset_connections"].items():
-    .${k} (${v}_rst_n),
+    .${k} (${top["reset_paths"][v]}),
   % endfor
   % for node in xbar["nodes"]:
     % if node["type"] == "device":

@@ -51,11 +51,11 @@ class tl_monitor extends dv_base_monitor#(
     forever begin
       @(negedge cfg.vif.rst_n);
       // on reset asserted sample pending request is present or not
-      if (cfg.en_cov) cov.pending_req_on_rst_cg.sample(pending_a_req.size() != 0);
+      if (cfg.en_cov) cov.m_pending_req_on_rst_cg.sample(pending_a_req.size() != 0);
       @(posedge cfg.vif.rst_n);
       pending_a_req.delete();
       if (objection_raised) begin
-        run_phase_h.drop_objection(this);
+        run_phase_h.drop_objection(this, $sformatf("%s objection dropped", `gfn));
         objection_raised = 1'b0;
       end
     end
@@ -77,15 +77,15 @@ class tl_monitor extends dv_base_monitor#(
                    agent_name, req.convert2string()), UVM_HIGH)
         a_chan_port.write(req);
         pending_a_req.push_back(req);
-        if (cfg.max_outstanding_req > 0) begin
+        if (cfg.max_outstanding_req > 0 && cfg.vif.rst_n === 1) begin
           if (pending_a_req.size() > cfg.max_outstanding_req) begin
             `uvm_error(get_full_name(), $sformatf("Number of pending a_req exceeds limit %0d",
                                         pending_a_req.size()))
           end
-          if (cfg.en_cov) cov.max_outstanding_cg.sample(pending_a_req.size());
+          if (cfg.en_cov) cov.m_max_outstanding_cg.sample(pending_a_req.size());
         end
         if (!objection_raised) begin
-          run_phase_h.raise_objection(this);
+          run_phase_h.raise_objection(this, $sformatf("%s objection raised", `gfn));
           objection_raised = 1'b1;
         end
       end
@@ -117,7 +117,7 @@ class tl_monitor extends dv_base_monitor#(
             d_chan_port.write(rsp);
             pending_a_req.delete(i);
             if (pending_a_req.size() == 0) begin
-              run_phase_h.drop_objection(this);
+              run_phase_h.drop_objection(this, $sformatf("%s objection dropped", `gfn));
               objection_raised = 1'b0;
             end
             req_found = 1'b1;

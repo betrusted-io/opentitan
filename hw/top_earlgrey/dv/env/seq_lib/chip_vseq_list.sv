@@ -3,4 +3,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
 `include "chip_base_vseq.sv"
-`include "chip_csr_vseq.sv"
+`include "chip_common_vseq.sv"
+`include "chip_sw_test_base_vseq.sv"

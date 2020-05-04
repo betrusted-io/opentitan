@@ -7,6 +7,7 @@ title: "User Guides"
   * [Quickstart]({{< relref "quickstart.md" >}})
   * [Notes on using GitHub and local git]({{< relref "github_notes.md" >}})
   * [Directory Structure]({{< relref "directory_structure.md" >}})
+  * [Installing Build Requirements]({{< relref "install_instructions" >}})
   * [Build software]({{< relref "getting_started_sw.md" >}})
   * [Getting started with Verilator]({{< relref "getting_started_verilator.md" >}})
   * [Getting started on FPGAs]({{< relref "getting_started_fpga.md" >}})
@@ -42,9 +43,3 @@ title: "User Guides"
   * Reviews
   * Filing Issues
   * Pending Work Items
-* *Validation Methodology* (TODO)
-  * How to download bit stream
-  * What tests exist today
-  * How to run tests
-  * How does this differ from verification
-  * How to add tests

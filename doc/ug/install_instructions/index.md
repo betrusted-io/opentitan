@@ -38,7 +38,7 @@ $ sudo chown $(id -un) /tools
 
 ### Clone repository
 
-If you intend to contribute back to OpenTitan you will want your own fork of the repository on GitHub and to work using that, see the [notes for using GitHub]({{< relref "github_notes.md" >}}).
+If you intend to contribute back to OpenTitan you will want your own fork of the repository on GitHub and to work using that, see the [notes for using GitHub]({{< relref "doc/ug/github_notes.md" >}}).
 Otherwise make a simple clone of the main OpenTitan repository.
 
 ```console
@@ -55,12 +55,7 @@ A number of software packages from the distribution's package manager is require
 All installation instructions below are for Ubuntu 16.04.
 Adjust as necessary for other Linux distributions.
 
-```console
-$ sudo apt-get install git python3 python3-pip python3-setuptools \
-    build-essential autoconf flex bison ninja-build pkgconf \
-    srecord zlib1g-dev libftdi1-dev libftdi1-2 libssl-dev \
-    libusb-1.0-0-dev libtool libelf-dev
-```
+{{< apt_cmd >}}
 
 Some tools in this repository are written in Python 3 and require Python dependencies to be installed through `pip`.
 (Note that the `diff_generated_util_output.py` tool works better with Python 3.6 or later where the order is preserved in `dict` types, earlier versions of Python will show spurious differences caused by things being reordered.)
@@ -139,7 +134,7 @@ We recommend compiling Verilator from source, as outlined here.
 Then you can fetch, build and install Verilator itself (this should be done outside the `$REPO_TOP` directory).
 
 ```console
-$ export VERILATOR_VERSION=4.010
+$ export VERILATOR_VERSION={{< tool_version "verilator" >}}
 
 $ git clone http://git.veripool.org/git/verilator
 $ cd verilator
@@ -235,7 +230,7 @@ To get started faster we use the web installer in the following.
 
    ![Vivado installation step 6](img/install_vivado/step6.png)
 
-10. Double-check the installation summary and click on "Next" to start the installation process.
+10. Double-check the installation summary and click on "Install" to start the installation process.
 
    ![Vivado installation step 7](img/install_vivado/step7.png)
 

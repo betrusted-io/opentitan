@@ -11,30 +11,51 @@
 #
 # Here are some examples:
 #   fpv rv_plic_fpv
-#   fpv pinmux_fpv
+#   fpv gpio
 #
 # More options:
 # -p:  provide core file path
 # -gui: run JasperGold GUI
+# -cov: run coverage
+# -chk: run checks for assumptions: deadlock, conflict, live chks
+# -t: choose which formal tool to use, default using jaspergold, also support
+# vcf(VC Formal)
 #
 # Example:
-#   fpv pinmux_fpv -p vip:pinmux_fpv -gui
+#   fpv pinmux_fpv -p vip:pinmux_fpv -gui -cov -t jg
 #
 # Note that the module to be tested needs to have an _fpv testbench
 # and a corresponding core file for this to work.
+
 export FPV_TOP=$1
 shift
 gui=0
+tool="jg"
+export COV=0
+export CHECK=0
 
 while [ "$1" != "" ]; do
   case "$1" in
     "-p")
       shift
-      export CORE_PATH=$1
+      CORE_PATH=$1
       ;;
     "-gui")
       gui=1
       echo "using jasper gold GUI"
+      ;;
+    "-cov")
+      COV=1
+      echo "enable FPV coverage"
+      ;;
+    "-chk")
+      CHECK=1
+      echo "enable assumption checks"
+      ;;
+    "-t")
+      shift
+      tool=$1
+      echo "running in tool: $tool"
       ;;
   esac
   shift
@@ -53,33 +74,36 @@ if [ "${CORE_PATH}" == "" ]; then
   if [[ $FPV_TOP == *"_fpv" ]]; then
     CORE_PATH="fpv:${FPV_TOP}"
   else
-    CORE_PATH="ip:${FPV_TOP}:0.1"
+    CORE_PATH="ip:${FPV_TOP}"
   fi
 fi
 echo "core_file path: lowrisc:${CORE_PATH}"
 
-fusesoc --cores-root ../.. run --tool=icarus --setup "lowrisc:${CORE_PATH}"
+fusesoc --cores-root ../.. run --tool=icarus --target=formal --setup "lowrisc:${CORE_PATH}"
 
 echo "-------------------------------------------------------------------------"
 echo "-- Run JasperGold"
 echo "-------------------------------------------------------------------------"
 
-cd build/*${FPV_TOP}*/default-icarus
+cd build/*${FPV_TOP}*/formal-icarus
 
-if [ "${gui}" == "1" ]; then
-  jg ../../../fpv.tcl \
-     -proj ../../../jgproject \
-     -allow_unsupported_OS \
-     | tee ../../../fpv.log
-else
-  jg -batch \
-    ../../../fpv.tcl \
-    -proj ../../../jgproject \
-    -allow_unsupported_OS \
-    -command exit \
-    | tee ../../../fpv.log
+if [ "${tool}" == "jg" ]; then
+  if [ "${gui}" == "1" ]; then
+    jg ../../../fpv.tcl \
+       -proj ../../../jgproject \
+       -allow_unsupported_OS \
+       | tee ../../../fpv.log
+  else
+    jg -batch \
+      ../../../fpv.tcl \
+      -proj ../../../jgproject \
+      -allow_unsupported_OS \
+      -command exit \
+      | tee ../../../fpv.log
+  fi
+elif [ "${tool}" == "vcf" ]; then
+  vcf -f fpv_vcf.tcl
 fi
-
 cd -
 
 echo "-------------------------------------------------------------------------"

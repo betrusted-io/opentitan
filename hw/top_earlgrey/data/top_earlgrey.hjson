@@ -8,21 +8,72 @@
 
   datawidth: "32",  # 32-bit datawidth
 
-  clocks: [
-    { name: "main", freq: "100000000" }
-    { name: "fixed", freq: "100000000" }
-  ]
+  // This is the clock data strcture of the design.
+  // The src key indicates the raw clock sources in the design
+  // The groups key indicates the various clock groupings in the design
+  clocks: {
+
+    srcs: [
+      { name: "main",      freq: "100000000" }
+      { name: "fixed",     freq: "100000000" }
+      { name: "usb_48mhz", freq: "48000000" }
+    ],
+
+    // Clock Group attributes
+    // name: name of group.
+    //
+    // sw_cfg: whether software is allowed to gate the clock
+    // "no"   - software is not allowed to gate clocks
+    // "yes"  - software is allowed to gate clocks
+    // "hint" - software can provide a hint, and hw controls the rest
+    //
+    // unique: whether each module in the group can be separately gated
+    //         if sw_cfg is "no", this field has no meaning
+    // "yes"  - each clock is individually controlled
+    // "no"   - the group is controlled as one single unit
+    //
+    // The powerup and proc groups are unique.
+    // The powerup group of clocks do not need through the clock
+    // controller as they manage clock controller behavior
+    // The proc group is not peripheral, and direclty hardwired
+
+    groups: [
+      { name: "powerup", sw_cg: "no"                   }
+      { name: "trans",   sw_cg: "hint", unique: "yes", }
+      { name: "infra",   sw_cg: "no",                  }
+      { name: "secure",  sw_cg: "no"                   }
+      { name: "peri",    sw_cg: "yes",  unique: "no"   }
+      { name: "timers",  sw_cg: "no"                   }
+      { name: "proc",
+        sw_cg: "no"
+        unique: "no"
+        clocks: {
+          clk_proc_main: main
+        }
+      }
+    ],
+  }
 
   // Reset attributes
-  // name: name of reset. Real name is `name`_rst_n
-  // type: reset type, either root or leaf
-  // root: if reset type not root, the root reset it is related to
+  // name: name of reset.
+  // If type is "gen", then real name is `name`_rst_n
+  // If type is "por", then real name is just `name`
+  //
+  // root: The parent reset.
+  // If type is "por", there is no root, since it is the root
+  //
   // clk:  related clock domain for synchronous release
+  // If type is "por", there is not related clock, since it is
+  // likely external or generated from a voltage comparator
+  //
   resets: [
-    { name: "lc", type: "root", clk: "main"}
-    { name: "sys", type: "root", clk: "main"}
-    { name: "sys_fixed", type: "leaf", root: "sys", clk: "fixed"}
-    { name: "spi_device", type: "leaf", root: "sys", clk: "fixed"}
+    { name: "rst_ni",     type: "por" }
+    { name: "por",        type: "gen",  root: "lc",  clk: "fixed" }
+    { name: "lc",         type: "gen",  root: "lc",  clk: "fixed" }
+    { name: "sys",        type: "gen",  root: "sys", clk: "main"  }
+    { name: "sys_fixed",  type: "gen",  root: "sys", clk: "fixed" }
+    { name: "spi_device", type: "gen",  root: "sys", clk: "fixed", sw: 1}
+    { name: "usb",        type: "gen",  root: "sys", clk: "usb",   sw: 1}
   ]
 
   // Number of cores: used in rv_plic and timer
@@ -39,7 +90,7 @@
       // clock connections defines the port to top level clock connection
       // the ip.hjson will declare the clock port names
       // If none are defined at ip.hjson, clk_i is used by default
-      clock_connections: {clk_i: "fixed"},
+      clock_srcs: {clk_i: "fixed"},
 
       // reset connections defines the port to top level reset connection
       // the ip.hjson will declare the reset port names
@@ -50,44 +101,51 @@
     },
     { name: "gpio",
       type: "gpio",
-      clock_connections: {clk_i: "fixed"},
+      clock_srcs: {clk_i: "fixed"},
+      clock_group: "peri",
       reset_connections: {rst_ni: "sys_fixed"},
       base_addr: "0x40010000",
     }
 
     { name: "spi_device",
       type: "spi_device",
-      clock_connections: {clk_i: "fixed"},
+      clock_srcs: {clk_i: "fixed"},
+      clock_group: "peri",
       reset_connections: {rst_ni: "spi_device"},
       base_addr: "0x40020000",
     },
     { name: "flash_ctrl",
       type: "flash_ctrl",
-      clock_connections: {clk_i: "main"},
+      clock_srcs: {clk_i: "main"},
+      clock_group: "infra",
       reset_connections: {rst_ni: "lc"},
       base_addr: "0x40030000",
     },
     { name: "rv_timer",
       type: "rv_timer",
-      clock_connections: {clk_i: "fixed"},
+      clock_srcs: {clk_i: "fixed"},
+      clock_group: "timers",
       reset_connections: {rst_ni: "sys_fixed"},
       base_addr: "0x40080000",
     },
     { name: "aes",
       type: "aes",
-      clock_connections: {clk_i: "main"},
+      clock_srcs: {clk_i: "main"},
+      clock_group: "trans",
       reset_connections: {rst_ni: "sys"},
       base_addr: "0x40110000",
     },
     { name: "hmac",
       type: "hmac",
-      clock_connections: {clk_i: "main"},
+      clock_srcs: {clk_i: "main"},
+      clock_group: "trans",
       reset_connections: {rst_ni: "sys"},
       base_addr: "0x40120000",
     },
     { name: "rv_plic",
       type: "rv_plic",
-      clock_connections: {clk_i: "main"},
+      clock_srcs: {clk_i: "main"},
+      clock_group: "secure",
       reset_connections: {rst_ni: "sys"},
       base_addr: "0x40090000",
       generated: "true"         // Indicate this module is generated in the topgen
@@ -95,14 +153,16 @@
     { name: "pinmux",
       type: "pinmux",
       clock: "main",
-      clock_connections: {clk_i: "main"},
+      clock_srcs: {clk_i: "main"},
+      clock_group: "secure",
       reset_connections: {rst_ni: "sys"},
       base_addr: "0x40070000",
       generated: "true"
     },
     { name: "alert_handler",
       type: "alert_handler",
-      clock_connections: {clk_i: "main"},
+      clock_srcs: {clk_i: "main"},
+      clock_group: "secure",
       reset_connections: {rst_ni: "sys"},
       base_addr: "0x40130000",
       generated: "true"         // Indicate this module is generated in the topgen
@@ -112,39 +172,99 @@
         LfsrSeed:  "0x7FFFFFFF"
       }
     }
+    { name: "pwrmgr",
+      type: "pwrmgr",
+      clock: "main",
+      clock_srcs: {clk_i: "fixed", clk_slow_i: "fixed"},
+      clock_group: "powerup",
+      reset_connections: {rst_ni: "por", rst_slow_ni: "por"},
+      base_addr: "0x400A0000",
+      generated: "true"
+    },
+    { name: "rstmgr",
+      type: "rstmgr",
+      clock: "main",
+      clock_srcs: {clk_i: "fixed", clk_main_i: "main", clk_fixed_i: "fixed", clk_usb_i: "usb_48mhz"},
+      clock_group: "powerup",
+      reset_connections: {rst_ni: "rst_ni"},
+      base_addr: "0x400B0000",
+      generated: "true"
+    },
     // dummy module to capture the alert handler escalation signals
     // and test them by converting them into IRQs
     { name: "nmi_gen",
       type: "nmi_gen",
-      clock_connections: {clk_i: "main"},
+      clock_srcs: {clk_i: "main"},
+      clock_group: "secure",
       reset_connections: {rst_ni: "sys"},
       base_addr: "0x40140000",
     }
+    { name: "usbdev",
+      type: "usbdev",
+      clock_srcs: {clk_i: "fixed", clk_usb_48mhz_i: "usb_48mhz"},
+      clock_group: "peri",
+      reset_connections: {rst_ni: "sys_fixed", rst_usb_48mhz_ni: "usb"},
+      base_addr: "0x40150000",
+    },
   ]
 
   // Memories (ROM, RAM, eFlash) are defined at the top.
   // It utilizes the primitive cells but configurable
   memory: [
     { name: "rom",
-      clock_connections: {clk_i: "main"},
+      clock_srcs: {clk_i: "main"},
+      clock_group: "infra",
       reset_connections: {rst_ni: "sys"},
       type: "rom",
       base_addr: "0x00008000",
-      size: "0x2000"
+      swaccess: "ro",
+      size: "0x4000"
     },
     { name: "ram_main",
-      clock_connections: {clk_i: "main"},
+      clock_srcs: {clk_i: "main"},
+      clock_group: "infra",
       reset_connections: {rst_ni: "sys"},
       type: "ram_1p",
       base_addr: "0x10000000",
       size: "0x10000" },
     { name: "eflash",
-      clock_connections: {clk_i: "main"},
+      clock_srcs: {clk_i: "main"},
+      clock_group: "infra",
       reset_connections: {rst_ni: "lc"},
       type: "eflash",
       base_addr: "0x20000000",
-      size: "0x80000" },
+      swaccess: "ro",
+      size: "0x80000",
+      inter_signal_list: [
+        { struct: "flash",    // flash_req_t, flash_rsp_t
+          type: "req_rsp",
+          name: "flash_ctrl", // flash_ctrl_i (req), flash_ctrl_o (rsp)
+          act:  "rsp",
+        }
+      ],
+    },
   ],
+
+  // Inter-module Connection.
+  // format:
+  //    requester: [ resp1, resp2, ... ],
+  //
+  //  the field and value should be module_inst.port_name
+  //  e.g flash_ctrl0.flash: [flash_phy0.flash_ctrl]
+  inter_module: {
+    'connect': {
+      'flash_ctrl.flash': ['eflash.flash_ctrl']
+      'pwrmgr.pwr_rst'  : ['rstmgr.pwr'],
+    }
+
+    // top is to connect to top net/struct.
+    // It defines the signal in the top and connect from the module,
+    // use of the signal is up to top template
+    'top': ['rstmgr.resets', 'rstmgr.cpu', 'pwrmgr.pwr_cpu'],
+
+    // ext is to create port in the top.
+    'external': [],
+  },
 
   debug_mem_base_addr: "0x1A110000",
 
@@ -153,12 +273,14 @@
   // Assume xbar.hjson is located in the same directory of top.hjson
   xbar: [
     { name: "main",
-      clock_connections: {clk_main_i: "main", clk_fixed_i: "fixed"},
+      clock_srcs: {clk_main_i: "main", clk_fixed_i: "fixed"},
+      clock_group: "infra",
       reset: "sys",
       reset_connections: {rst_main_ni: "sys", rst_fixed_ni: "sys_fixed"}
     },
     { name: "peri",
-      clock_connections: {clk_peri_i: "fixed"},
+      clock_srcs: {clk_peri_i: "fixed"},
+      clock_group: "infra",
       reset: "sys_fixed",
       reset_connections: {rst_peri_ni: "sys_fixed"},
     }
@@ -170,7 +292,7 @@
   // and include every modules.
   // first item goes to LSB of the interrupt source
   interrupt_module: ["gpio", "uart", "spi_device", "flash_ctrl",
-                     "hmac", "alert_handler", "nmi_gen" ]
+                     "hmac", "alert_handler", "nmi_gen", "usbdev", "pwrmgr" ]
 
   // RV_PLIC has two searching algorithm internally to pick the most highest priority interrupt
   // source. "sequential" is smaller but slower, "matrix" is larger but faster.
@@ -205,6 +327,7 @@
       //{ name: "uart.tx", pad: ["ChA[0]"]},
       { name: "uart", pad: ["ChA[0..1]"]},
       // { name: "dio_module.signal_input", pad: ["ChA[31]"] }
+      { name: "usbdev", pad: ["ChC[0..7]"]},
     ],
 
     // Multiplexing IO modules. The in/out ports of the modules below are
@@ -240,6 +363,7 @@
     pads: [
       { name: "ChA" type: "IO_33V", count: 32 }, // Accessing as ChA[0] .. ChA[31]
       { name: "ChB" type: "IO_33V", count: 4, attr: ["KEEP", "WEAK"]},
+      { name: "ChC" type: "IO_33V", count: 4, attr: ["KEEP", "STRONG"]},
     ]
   }
 

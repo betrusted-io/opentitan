@@ -5,8 +5,8 @@ Prerequisites
 
 To be able to run the instruction generator, you need to have an RTL simulator
 which supports SystemVerilog and UVM 1.2. This generator has been verified with
-Synopsys VCS, Cadence Incisive/Xcelium, and Mentor Questa simulators. Please
-make sure the EDA tool environment is properly setup before running the generator.
+Synopsys VCS, Cadence Incisive/Xcelium, Mentor Questa, and Aldec Riviera-PRO simulators.
+Please make sure the EDA tool environment is properly setup before running the generator.
 
 Install RISCV-DV
 ----------------
@@ -64,7 +64,7 @@ Currently three ISS are supported, the default ISS is spike. You can install any
 one of below to run ISS simulation.
 
 1.  - `spike`_ setup
-    - Follow the `spike steps`_ to build spike
+    - Follow the instructions to build spike
     - Build spike with "--enable-commitlog"
     - Set environment variable SPIKE_PATH to the directory of the spike binary
 2.  - `riscv-ovpsim`_ setup
@@ -76,8 +76,7 @@ one of below to run ISS simulation.
     - Follow the `sail-riscv steps`_ to install sail-riscv
     - Set environment variable SAIL_RISCV to the path of sail-riscv binary
 
-.. _spike: https://github.com/riscv/riscv-isa-sim#
-.. _spike steps: https://github.com/riscv/riscv-isa-sim#build-steps
+.. _spike: https://github.com/riscv/riscv-isa-sim
 .. _riscv-ovpsim: https://github.com/riscv/riscv-ovpsim
 .. _whisper: https://github.com/westerndigitalcorporation/swerv-ISS
 .. _sail-riscv: https://github.com/rems-project/sail-riscv
@@ -110,6 +109,7 @@ You can specify the simulator by "-simulator" option::
     run --test riscv_arithmetic_basic_test --simulator questa
     run --test riscv_arithmetic_basic_test --simulator dsim
     run --test riscv_arithmetic_basic_test --simulator qrun
+    run --test riscv_arithmetic_basic_test --simulator riviera
 
 The complete test list can be found in `base testlist yaml`_. To run a full regression, simply use below command::
 
@@ -179,21 +179,24 @@ real RISC-V processor::
     run --test=riscv_rand_instr_test --iss=ovpsim,whisper
     run --test=riscv_rand_instr_test --iss=spike,sail
 
-Run directed assembly tests
----------------------------
+Run directed assembly/C tests
+-----------------------------
 
-Sometimes it might be useful to run some hand-coded assembly tests to hit some
+Sometimes it might be useful to run some hand-coded assembly/C tests to hit some
 corner cases::
 
 
-    # Run a single/multiple assembly test
+    # Run a single/multiple assembly/C test
     run --asm_tests asm_test_path1/asm_test1.S,asm_test_path2/asm_test2.S
+    run --c_tests c_test_path1/c_test1.c,c_test_path2/c_test2.c
 
-    # Run regression with all assembly tests(*.S) under a given directory
+    # Run regression with all assembly tests(*.S)/ C tests(*.c) under a given directory
     run --asm_tests asm_test_path1,asm_test_path2
+    run --c_tests c_test_path1,c_test_path2
 
-    # Run mix between the assembly test and assembly tests under a directory
+    # Run mix between the assembly/C test and assembly/C tests under a directory
     run --asm_tests asm_test_path1/asm_test1.S,asm_test_path2
+    run --c_tests c_test_path1/c_test1.c,c_test_path2
 
-You could also use this approach to integrate the assembly tests
+You could also use this approach to integrate the assembly/C tests
 from other sources to riscv-dv flow.

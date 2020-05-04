@@ -3,6 +3,17 @@
 # to run JasperGold FPV on all modules, type
 #   fpv_all
 
+tool="jg"
+while [ "$1" != "" ]; do
+  case "$1" in
+    "-t")
+      shift
+      tool=$1
+      ;;
+  esac
+  shift
+done
+
 #-------------------------------------------------------------------------
 # list all blocks
 #-------------------------------------------------------------------------
@@ -15,9 +26,10 @@ declare -a blocks=(
   "uart"
   "hmac"
   "flash_ctrl"
-  #"usbuart"
+  "pwrmgr"
+  "usbuart"
   "usbdev"
-  # "usb_fs_nb_pe" This module doesn't have any assertions yet
+  "usb_fs_nb_pe"
   # TODO: bind files are deleted
   # "tlul_adapter_sram"
   # "tlul_socket_1n"
@@ -26,6 +38,8 @@ declare -a blocks=(
   # "xbar_main"
   #"top_earlgrey"
   # run formal on dedicated FPV testbenches
+  "prim_arbiter_ppc_fpv"
+  "prim_arbiter_tree_fpv"
   "prim_lfsr_fpv"
   "prim_fifo_sync_fpv"
   "prim_alert_rxtx_fpv"
@@ -34,6 +48,7 @@ declare -a blocks=(
   "pinmux_fpv"
   "padctrl_fpv"
   "rv_plic_fpv"
+  "rv_plic_generic_fpv"
 )
 
 #-------------------------------------------------------------------------
@@ -45,7 +60,7 @@ printf "the percentages of covered and proven assertions.\n\n"
 format1="%28s %10s %10s %10s \n"
 format2="%28s %10s %9.0f%% %9.0f%% \n"
 printf "${format1}" "Block" "Asserts" "Covered" "Proven"
-echo "----------------------------------------------------"
+echo "-----------------------------------------------------------------"
 
 #-------------------------------------------------------------------------
 # run fpv and summarize results
@@ -54,7 +69,7 @@ echo "----------------------------------------------------"
 
 for block in "${blocks[@]}" ; do
 
-  ./fpv $block > /dev/null 2>&1
+  ./fpv $block -t ${tool} > /dev/null 2>&1
   cp fpv.log fpv_${block}.log
 
   # summarize results

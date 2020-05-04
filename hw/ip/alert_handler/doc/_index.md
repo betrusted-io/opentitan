@@ -128,13 +128,13 @@ configuration, and hence these parameters are placed into a package as
 "localparams". The parameterization rules are explained in more detail in the
 architectural description.
 
-Localparam     | Default (Max)         | Description
----------------|-----------------------|---------------
-`NAlerts`      | 8 (248)               | Number of alert instances. Maximum number bounded by LFSR implementation that generates ping timing.
-`EscCntWidth`  | 32 (32)               | Width of the escalation counters in bit.
-`AccuCntWidth` | 16 (32)               | Width of the alert accumulation counters in bit.
-`AsyncOn`      | '0 (2^`NAlerts`-1)    | This is a bit array specifying whether a certain alert sender / receiver pair goes across an asynchronous boundary or not.
-`LfsrSeed`     | '1 (2^31-1)           | Seed for the LFSR timer, must be nonzero.
+Localparam     | Default (Max)         | Top Earlgrey | Description
+---------------|-----------------------|--------------|---------------
+`NAlerts`      | 8 (248)               | 1            | Number of alert instances. Maximum number bounded by LFSR implementation that generates ping timing.
+`EscCntWidth`  | 32 (32)               | 32           | Width of the escalation counters in bit.
+`AccuCntWidth` | 16 (32)               | 16           | Width of the alert accumulation counters in bit.
+`AsyncOn`      | '0 (2^`NAlerts`-1)    | `1'b0`       | This is a bit array specifying whether a certain alert sender / receiver pair goes across an asynchronous boundary or not.
+`LfsrSeed`     | '1 (2^31-1)           | `0x7fffffff` | Seed for the LFSR timer, must be nonzero.
 
 The next table lists free parameters in the `prim_alert_sender` and
 `prim_alert receiver` submodules.
@@ -146,7 +146,7 @@ Parameter      | Default (Max)    | Description
 
 ### Signals
 
-{{< hwcfg "hw/ip/alert_handler/data/alert_handler.hjson" >}}
+{{< hwcfg "hw/top_earlgrey/ip/alert_handler/data/autogen/alert_handler.hjson" >}}
 
 The table below lists other alert handler module signals. The number of alert
 instances is parametric and hence alert and ping diff pairs are grouped together
@@ -578,20 +578,20 @@ shown.
     { name: 'irq_o[0]',             wave: '01.|................' },
     { name: 'CLASSA_STATE',         wave: '3..|.3|3.|3..|3..|3.', data: ['Idle', '   Phase0','Phase1','Phase2','Phase3','Terminal'] },
     { name: 'CLASSA_ESC_CNT',       wave: '3..|.3|33|333|333|3.', data: ['0','1','1','2','1','2','3','1','2','3','0'] },
-    { name: 'esc_tx_o.esc_p[0]',    wave: '0..|.1|0............', node: '.....a.b' },
-    { name: 'esc_tx_o.esc_n[0]',    wave: '1..|.0|1............' },
-    { name: 'esc_tx_o.esc_p[1]',    wave: '0..|..|1.|0.........', node: '.......c..d' },
-    { name: 'esc_tx_o.esc_n[1]',    wave: '1..|..|0.|1.........' },
-    { name: 'esc_tx_o.esc_p[2]',    wave: '0..|.....|1..|0.....', node: '..........e...f' },
-    { name: 'esc_tx_o.esc_n[2]',    wave: '1..|.....|0..|1.....' },
-    { name: 'esc_tx_o.esc_p[3]',    wave: '0..|.........|1..|0.', node: '..............g...h' },
-    { name: 'esc_tx_o.esc_n[3]',    wave: '1..|.........|0..|1.' },
+    { name: 'esc_tx_o.esc_p[0]',    wave: '0..|.1|.0...........', node: '.....a..b' },
+    { name: 'esc_tx_o.esc_n[0]',    wave: '1..|.0|.1...........' },
+    { name: 'esc_tx_o.esc_p[1]',    wave: '0..|..|1.|.0........', node: '.......c...d' },
+    { name: 'esc_tx_o.esc_n[1]',    wave: '1..|..|0.|.1........' },
+    { name: 'esc_tx_o.esc_p[2]',    wave: '0..|.....|1..|.0....', node: '..........e....f' },
+    { name: 'esc_tx_o.esc_n[2]',    wave: '1..|.....|0..|.1....' },
+    { name: 'esc_tx_o.esc_p[3]',    wave: '0..|.........|1..|.0', node: '..............g....h' },
+    { name: 'esc_tx_o.esc_n[3]',    wave: '1..|.........|0..|.1' },
   ],
   edge: [
-   'a->b 1e3 cycles',
-   'c->d 1e4 cycles',
-   'e->f 1e5 cycles',
-   'g->h 1e6 cycles',
+   'a->b 1e3 + 1 cycles',
+   'c->d 1e4 + 1 cycles',
+   'e->f 1e5 + 1 cycles',
+   'g->h 1e6 + 1 cycles',
   ],
   head: {
     text: 'Alert class gathering and escalation triggers (fully synchronous case)',
@@ -613,7 +613,6 @@ the first occurrence within an alert class, the accumulation threshold shall be
 set to 0. Also note that it takes one cycle to activate escalation and enter
 phase 0.
 
-
 The next wave shows a case where an interrupt remains unhandled and hence the
 interrupt timeout counter triggers escalation.
 
@@ -626,14 +625,14 @@ interrupt timeout counter triggers escalation.
     { name: 'irq_o[0]',                wave: '01..|.................', node: '.a..|.b' },
     { name: 'CLASSA_ESC_STATE',        wave: '33..|.3|3.|3..|3...|3.', data: ['Idle', 'Timeout','   Phase0','Phase1','Phase2','Phase3','Terminal'] },
     { name: 'CLASSA_ESC_CNT',          wave: '3333|33|33|333|3333|3.', data: ['0', '1','2','3','1e4','1','1','2','1','2','3','1','2','3','4','0'] },
-    { name: 'esc_tx_o.esc_p[0]',       wave: '0...|.1|0.............' },
-    { name: 'esc_tx_o.esc_n[0]',       wave: '1...|.0|1.............' },
-    { name: 'esc_tx_o.esc_p[1]',       wave: '0...|..|1.|0..........' },
-    { name: 'esc_tx_o.esc_n[1]',       wave: '1...|..|0.|1..........' },
-    { name: 'esc_tx_o.esc_p[2]',       wave: '0...|.....|1..|0......' },
-    { name: 'esc_tx_o.esc_n[2]',       wave: '1...|.....|0..|1......' },
-    { name: 'esc_tx_o.esc_p[3]',       wave: '0...|.........|1...|0.' },
-    { name: 'esc_tx_o.esc_n[3]',       wave: '1...|.........|0...|1.' },
+    { name: 'esc_tx_o.esc_p[0]',       wave: '0...|.1|.0............' },
+    { name: 'esc_tx_o.esc_n[0]',       wave: '1...|.0|.1............' },
+    { name: 'esc_tx_o.esc_p[1]',       wave: '0...|..|1.|.0.........' },
+    { name: 'esc_tx_o.esc_n[1]',       wave: '1...|..|0.|.1.........' },
+    { name: 'esc_tx_o.esc_p[2]',       wave: '0...|.....|1..|.0.....' },
+    { name: 'esc_tx_o.esc_n[2]',       wave: '1...|.....|0..|.1.....' },
+    { name: 'esc_tx_o.esc_p[3]',       wave: '0...|.........|1...|.0' },
+    { name: 'esc_tx_o.esc_n[3]',       wave: '1...|.........|0...|.1' },
   ],
   edge: [
    'a->b 1e4 cycles',
@@ -647,6 +646,11 @@ interrupt timeout counter triggers escalation.
     }
 }
 {{< /wavejson >}}
+
+It should be noted here that the differential escalation signaling protocol
+distinguishes 'true' escalation conditions from mere pings by encoding them as
+pulses that are N + 1 cycles long. This is reflected in the two wave diagrams
+above. Refer to the subsequent section on escalation signaling for more details.
 
 ### Escalation Signaling
 
@@ -750,16 +754,18 @@ This is achieved by asserting `ping_en_i` at the escalation sender module.
 A ping request is encoded as a single cycle pulse on the `esc_tx_o.esc_p/n` outputs.
 Hence, the receiver module will not decode this single cycle pulse as an escalation enable message, but it will respond to it with a "1010" pattern on the `esc_rx_i.resp_p/n` lines.
 The escalation sender module will assert `ping_ok_o` if that pattern is received correctly after one cycle of latency.
-Otherwise the LFSR timer will raise a "pingfail" alert after the programmable timeout is reached.
+Otherwise, the escalation sender will first assert `integ_fail_o` later, after the programmable ping timeout is reached, the LFSR timer will raise a "pingfail" alert.
+The `integ_fail_o` triggers in this case since "no ping response" and "wrong ping response" are ambiguous in this setting, and it has been decided to not suppress integrity failures when expecting a ping response.
+
 This mechanism is illustrated below from the viewpoint of the sender module.
 
 {{< wavejson >}}
 {
   signal: [
     { name: 'clk_i',           wave: 'p..............' },
-    { name: 'ping_en_i',       wave: '01....0|.1.0...' ,  node: '.a'},
+    { name: 'ping_en_i',       wave: '01....0|.1.....' ,  node: '.a'},
     { name: 'ping_ok_o',       wave: '0....10|.......' ,  node: '.....e....g'},
-    { name: 'integ_fail_o',    wave: '0......|.......' },
+    { name: 'integ_fail_o',    wave: '0......|..10101' },
     { name: 'esc_en_i',        wave: '0......|.......' },
     { name: 'esc_rx_i.resp_p', wave: '0.1010.|.......' ,  node: '..c..d....f'},
     { name: 'esc_rx_i.resp_n', wave: '1.0101.|.......' },
@@ -786,6 +792,8 @@ Note that the escalation signal always takes precedence, and the `ping_en_i`
 will just be acknowledged with `ping_ok_o` in case `esc_en_i` is already
 asserted. An ongoing ping sequence will be aborted immediately.
 
+Another thing to note is that the ping and escalation response sequences have to start _exactly_ one cycle after either a ping or escalation event has been signalled.
+Otherwise the escalation sender will assert `integ_fail_o` immediately.
 
 # Programmers Guide
 
@@ -842,6 +850,8 @@ the security settings process) should do the following:
     - For each escalation signal (0..3):
         - Determine whether to enable the escalation signal, and set the
           {{< regref "CLASSA_CTRL.E0_EN" >}} bit accordingly (default is enabled).
+          Note that setting all of the `E*_EN` bits to 0 within a class has the same
+          effect of disabling the entire class by setting {{< regref "CLASSA_CTRL.EN" >}} to zero.
         - Determine the phase -> escalation mapping of this class and
           program it via the {{< regref "CLASSA_CTRL.E0_MAP" >}} values if it needs to be
           changed from the default mapping (0->0, 1->1, 2->2, 3->3).
@@ -902,22 +912,20 @@ not be triggered by this testing mechanism.
 
 ## Register Table
 
-The below register description can be generated with the `reg_alert_handler.py`
-script. The reason for having yet another script for register generation is
-that the alert handler is configurable for the number of alert sources
-(similar to the rv_plic design).
+The register description below matches the instance in the [Earl Grey top level
+design]({{< relref "hw/top_earlgrey/doc" >}}).
 
-The register description below may not match with the actual instance in Top
-Earlgrey, since the alert handler is generated by the topgen tool so that the
-number of alert sources matches.
+A similar register description can be generated with the `reg_alert_handler.py`
+script. The reason for having yet another script for register generation is that
+the alert handler is configurable for the number of alert sources (similar to
+the rv_plic design).
 
-In order to generate the register file below, from `hw/ip/alert_handler/doc`:
+In order to generate the register file for four alert sources, from
+`hw/ip/alert_handler/doc`:
 
 ```console
 $ ./reg_alert_handler.py alert_handler.hjson.tpl -n 4 > alert_handler.hjson
 ```
-
-This creates the register file for 4 alert sources.
 
 Note that you should also update the regfile wrapper after updating the
 regfile using
@@ -926,8 +934,7 @@ regfile using
 $ ./alert_handler_reg_wrap.sv.tpl -n 4 > ../rtl/alert_handler_reg_wrap.sv
 ```
 
-
-{{< registers "hw/ip/alert_handler/data/alert_handler.hjson" >}}
+{{< registers "hw/top_earlgrey/ip/alert_handler/data/autogen/alert_handler.hjson" >}}
 
 
 # Additional Notes

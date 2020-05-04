@@ -7,7 +7,7 @@ class spi_host_seq extends spi_base_seq;
   `uvm_object_new
 
   // data to be sent
-  rand logic [7:0] data[$];
+  rand bit [7:0] data[$];
 
   // constrain size of data sent / received to be at most 64kB
   constraint data_size_c {
@@ -18,6 +18,7 @@ class spi_host_seq extends spi_base_seq;
     req = spi_item::type_id::create("req");
     start_item(req);
     `DV_CHECK_RANDOMIZE_WITH_FATAL(req,
+                                   item_type == SpiTransNormal;
                                    data.size() == local::data.size();
                                    foreach (data[i]) {
                                      data[i] == local::data[i];

@@ -11,6 +11,9 @@
   // Top level testbench name (sv module).
   tb: tb
 
+  // Simulator used to sign off this block
+  tool: vcs
+
   // Fusesoc core file used for building the file list.
   fusesoc_core: lowrisc:dv:rv_dm_sim:0.1
 
@@ -31,6 +34,9 @@
                 "{proj_root}/hw/dv/data/tests/mem_tests.hjson",
                 "{proj_root}/hw/dv/data/tests/stress_tests.hjson"]
 
+  // Add additional tops for simulation.
+  sim_tops: ["-top rv_dm_bind"]
+
   // Default iterations for all tests - each test entry can override this.
   reseed: 50
 
@@ -43,6 +49,14 @@
     {
       name: rv_dm_sanity
       uvm_test_seq: rv_dm_sanity_vseq
+    }
+  ]
+
+  // List of regressions.
+  regressions: [
+    {
+      name: sanity
+      tests: ["rv_dm_sanity"]
     }
   ]
 }

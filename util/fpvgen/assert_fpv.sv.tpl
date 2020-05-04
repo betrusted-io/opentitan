@@ -5,6 +5,8 @@
 // Assertions for ${dut.name}.
 // Intended to be used with a formal tool.
 
+`include "prim_assert.sv"
+
 % if len(dut.pkgs) > 0:
 module ${dut.name}_assert_fpv
 % for pkg in dut.pkgs:
@@ -41,18 +43,18 @@ module ${dut.name}_assert_fpv (
   // Assumptions //
   /////////////////
 
-  // `ASSUME(MyAssumption_M, ..., clk_i, !rst_ni)
+  // `ASSUME(MyAssumption_M, ...)
 
   ////////////////////////
   // Forward Assertions //
   ////////////////////////
 
-  // `ASSERT(MyFwdAssertion_A, ..., clk_i, !rst_ni)
+  // `ASSERT(MyFwdAssertion_A, ...)
 
   /////////////////////////
   // Backward Assertions //
   /////////////////////////
 
-  // `ASSERT(MyBkwdAssertion_A, ..., clk_i, !rst_ni)
+  // `ASSERT(MyBkwdAssertion_A, ...)
 
 endmodule : ${dut.name}_assert_fpv

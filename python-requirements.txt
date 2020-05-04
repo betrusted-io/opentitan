@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Keep sorted.
-fusesoc
 gitpython
 hjson
 isort
@@ -11,17 +10,19 @@ livereload
 mako
 # Meson 0.53.0 broke compatibility with Python 3.5.2, see
 # https://github.com/lowRISC/opentitan/issues/1288 for details.
-meson >= 0.51.0, < 0.53.0 # minimum matches version in meson.build
+# Meson 0.54.0+ requires ninja 1.7+, which isn't available by default on
+# Ubuntu 16.04.
+meson >= 0.51.0, != 0.53.0, <0.54.0 # minimum matches version in meson.build
 mistletoe>=0.7.2
+premailer
+pyelftools
 pyftdi
 pygments
 pytest
 pytest-timeout
 pyyaml
-yapf
-fusesoc
-gitpython
 tabulate
+yapf
 
 # Develpment version to get around YAML parser warning triggered by fusesoc
 # Upstream tracking: https://github.com/olofk/ipyxact/issues/19
@@ -29,3 +30,6 @@ git+https://github.com/olofk/ipyxact.git@master
 
 # Development version of edalize until all our changes are upstream
 git+https://github.com/lowRISC/edalize.git@ot
+
+# Development version with OT-specific changes
+git+https://github.com/lowRISC/fusesoc.git@ot

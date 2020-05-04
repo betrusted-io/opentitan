@@ -1,20 +1,10 @@
-####################################################################################################
-## Copyright lowRISC contributors.                                                                ##
-## Licensed under the Apache License, Version 2.0, see LICENSE for details.                       ##
-## SPDX-License-Identifier: Apache-2.0                                                            ##
-####################################################################################################
+# Copyright lowRISC contributors.
+# Licensed under the Apache License, Version 2.0, see LICENSE for details.
+# SPDX-License-Identifier: Apache-2.0
+
 .DEFAULT_GOAL := all
 
 all: build run
-
-########################
-## RAL target         ##
-########################
-ral:
-ifneq (${SKIP_RAL_GEN},1)
-	mkdir -p ${RAL_MODEL_DIR} && \
-	${RAL_TOOL} ${RAL_TOOL_OPTS}
-endif
 
 ###############################
 ## sim build and run targets ##
@@ -25,7 +15,7 @@ pre_compile:
 	mkdir -p ${BUILD_DIR} && \
 	env > ${BUILD_DIR}/env_vars
 
-gen_sv_flist: pre_compile ral
+gen_sv_flist: pre_compile
 	cd ${BUILD_DIR} && ${SV_FLIST_GEN_TOOL} ${SV_FLIST_GEN_OPTS}
 
 compile: gen_sv_flist
@@ -49,16 +39,17 @@ ifneq (${SW_NAME},)
 	# NOTE: Pass -f, since we're going to be re-building everything every time,
 	# anyways.
 	cd $(PROJ_ROOT) && \
-	BUILD_ROOT=$(SW_BUILD_DIR)/meson $(PROJ_ROOT)/meson_init.sh -f
+	BUILD_ROOT=$(SW_BUILD_DIR) $(PROJ_ROOT)/meson_init.sh -f
 	# NOTE: We're using the fpga platform for now, because there is no
 	# such thing as a DV platform yet (nor does any code do anything
 	# special for DV yet).
-	ninja -C $(SW_BUILD_DIR)/meson/build-out/sw/fpga all
+	ninja -C $(SW_BUILD_DIR)/build-out sw/device/boot_rom/boot_rom_export_$(SW_BUILD_DEVICE)
+	ninja -C $(SW_BUILD_DIR)/build-out sw/device/$(SW_DIR)/$(SW_NAME)_export_$(SW_BUILD_DEVICE)
 
 	mkdir -p $(SW_BUILD_DIR)/sw $(SW_BUILD_DIR)/rom
-	cp $(SW_BUILD_DIR)/meson/build-bin/sw/device/fpga/boot_rom/boot_rom.vmem \
+	cp $(SW_BUILD_DIR)/build-out/sw/device/boot_rom/boot_rom_$(SW_BUILD_DEVICE).vmem \
 		$(SW_BUILD_DIR)/rom/rom.vmem
-	cp $(SW_BUILD_DIR)/meson/build-bin/sw/device/fpga/$(SW_DIR)/$(SW_NAME).vmem \
+	cp $(SW_BUILD_DIR)/build-out/sw/device/$(SW_DIR)/$(SW_NAME)_$(SW_BUILD_DEVICE).vmem \
 		$(SW_BUILD_DIR)/sw/sw.vmem
 endif
 

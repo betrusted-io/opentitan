@@ -3,27 +3,34 @@
 // SPDX-License-Identifier: Apache-2.0
 {
   project:          opentitan
+  doc_server:       docs.opentitan.org
+  results_server:   reports.opentitan.org
+
   flow:             sim
   flow_makefile:    "{proj_root}/hw/dv/data/sim.mk"
 
-  import_cfgs:      ["{proj_root}/hw/dv/data/common_modes.hjson",
+  import_cfgs:      ["{proj_root}/hw/data/common_project_cfg.hjson",
+                     "{proj_root}/hw/dv/data/common_modes.hjson",
                      "{proj_root}/hw/dv/data/fusesoc.hjson",
-                     "{proj_root}/hw/dv/data/gen_ral_pkg.hjson",
-                     "{proj_root}/hw/dv/data/{simulator}/{simulator}.hjson"]
+                     "{proj_root}/hw/dv/data/{tool}/{tool}.hjson"]
 
   // Default directory structure for the output
-  scratch_path:     "{scratch_root}/{branch}.{dut}.{flow}.{simulator}"
-  build_dir:        "{scratch_path}/{build_mode}"
-  run_dir_name:     "{index}.{test}"
-  run_dir:          "{scratch_path}/{run_dir_name}/out"
-  sw_build_dir:     "{run_dir}/sw_build"
+  build_dir:          "{scratch_path}/{build_mode}"
+  run_dir_name:       "{index}.{test}"
+  run_dir:            "{scratch_path}/{run_dir_name}/out"
+  sw_build_dir:       "{scratch_path}/sw"
+  sw_root_dir:        "{proj_root}/sw"
 
   // pass and fail patterns
-  pass_patterns:    ["^TEST PASSED (UVM_)?CHECKS$"]
-  fail_patterns:    ["^TEST FAILED (UVM_)?CHECKS$",
-                     "^UVM_ERROR\\s[^:].*$",
-                     "^Assert failed: ",
-                     "^\\s*Offending '.*'"]
+  build_pass_patterns: []
+  build_fail_patterns: ["^ERROR:.*$"] // fusesoc build error
+  run_pass_patterns:   ["^TEST PASSED (UVM_)?CHECKS$"]
+  run_fail_patterns:   ["^UVM_ERROR\\s[^:].*$",
+                        "^UVM_FATAL\\s[^:].*$",
+                        "^UVM_WARNING\\s[^:].*$",
+                        "^Assert failed: ",
+                        "^\\s*Offending '.*'",
+                        "^TEST FAILED (UVM_)?CHECKS$"]
 
   // Default TileLink widths
   tl_aw: 32
@@ -37,14 +44,22 @@
   h: UVM_HIGH
   d: UVM_DEBUG
 
+  // Path to the dut instance (this is used in a couple of places such as coverage cfg
+  // file, xprop cfg file etc. If this is different for your block, then override it with
+  // the 'overrides' directive.
+  dut_instance: "{tb}.dut"
+
   // Default waves dump settings
   dump_file:  waves.{dump}
 
+  // Top level simulation entities.
+  sim_tops: ["-top {tb}"]
+
   // Default build and run opts
   build_opts: [// List multiple tops for the simulation
-               "-top {tb}",
-               "-top {dut}_bind",
+               "{sim_tops}",
                // Standard UVM defines
+               "+define+UVM",
                "+define+UVM_NO_DEPRECATED",
                "+define+UVM_REGEX_NO_DPI",
                "+define+UVM_REG_ADDR_WIDTH={tl_aw}",
@@ -60,6 +75,7 @@
     WAVES: {waves}
     DUT_TOP: {dut}
     TB_TOP: {tb}
+    dut_instance: {dut_instance}
   ]
 
   // Build modes are collection of build_opts and run_opts
@@ -95,7 +111,7 @@
   regressions: [
     {
       name: sanity
-      tests: ["{name}_sanity"]
+      reseed: 1
     }
 
     {
@@ -117,5 +133,10 @@
   ]
 
   // Project defaults for VCS
-  vcs_cov_hier: "-cm_hier {proj_root}/hw/dv/tools/vcs/cover.cfg"
+  vcs_cov_hier: "-cm_hier {tool_srcs_dir}/cover.cfg"
+  vcs_cov_excl_files: ["{tool_srcs_dir}/common_cov_excl.el"]
+
+  // Project defaults for Xcelium
+  // xcelium_cov_cfg_file: "-covfile {tool_srcs_dir}/cover.ccf"
+  // xcelium_cov_refine_file: ["{tool_srcs_dir}/common_cov.vRefine"]
 }

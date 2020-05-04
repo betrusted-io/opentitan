@@ -8,7 +8,11 @@
  *
  * Baugh-Wooley multiplier and Long Division
  */
-module ibex_multdiv_slow (
+
+`include "prim_assert.sv"
+
+module ibex_multdiv_slow
+(
     input  logic             clk_i,
     input  logic             rst_ni,
     input  logic             mult_en_i,
@@ -23,6 +27,9 @@ module ibex_multdiv_slow (
 
     output logic [32:0]      alu_operand_a_o,
     output logic [32:0]      alu_operand_b_o,
+
+    input  logic             multdiv_ready_id_i,
+
     output logic [31:0]      multdiv_result_o,
 
     output logic             valid_o
@@ -53,6 +60,7 @@ module ibex_multdiv_slow (
   logic [31:0] op_numerator_q, op_numerator_d;
   logic        is_greater_equal;
   logic        div_change_sign, rem_change_sign;
+  logic        multdiv_hold;
 
    // (accum_window_q + op_a_shift_q)
   assign res_adder_l       = alu_adder_ext_i[32:0];
@@ -145,12 +153,14 @@ module ibex_multdiv_slow (
       op_numerator_q   <= 32'h0;
       md_state_q       <= MD_IDLE;
     end else begin
-      multdiv_state_q  <= multdiv_state_d;
-      accum_window_q   <= accum_window_d;
-      op_b_shift_q     <= op_b_shift_d;
-      op_a_shift_q     <= op_a_shift_d;
-      op_numerator_q   <= op_numerator_d;
-      md_state_q       <= md_state_d;
+      if (~multdiv_hold) begin
+        multdiv_state_q  <= multdiv_state_d;
+        accum_window_q   <= accum_window_d;
+        op_b_shift_q     <= op_b_shift_d;
+        op_a_shift_q     <= op_a_shift_d;
+        op_numerator_q   <= op_numerator_d;
+        md_state_q       <= md_state_d;
+      end
     end
   end
 
@@ -161,6 +171,7 @@ module ibex_multdiv_slow (
     op_a_shift_d     = op_a_shift_q;
     op_numerator_d   = op_numerator_q;
     md_state_d       = md_state_q;
+    multdiv_hold     = 1'b0;
     if (mult_en_i || div_en_i) begin
       unique case(md_state_q)
         MD_IDLE: begin
@@ -170,7 +181,7 @@ module ibex_multdiv_slow (
               accum_window_d = {       ~(op_a_ext[32]   &     op_b_i[0]),
                                          op_a_ext[31:0] & {32{op_b_i[0]}}  };
               op_b_shift_d   = op_b_ext >> 1;
-              md_state_d     = MD_COMP;
+              md_state_d     = !(op_b_ext >> 1) ? MD_LAST : MD_COMP;
             end
             MD_OP_MULH: begin
               op_a_shift_d   = op_a_ext;
@@ -218,30 +229,38 @@ module ibex_multdiv_slow (
               accum_window_d = res_adder_l;
               op_a_shift_d   = op_a_shift_q << 1;
               op_b_shift_d   = op_b_shift_q >> 1;
+              md_state_d     = !(op_b_shift_q >> 1) ? MD_LAST : MD_COMP;
             end
             MD_OP_MULH: begin
               accum_window_d = res_adder_h;
               op_a_shift_d   = op_a_shift_q;
               op_b_shift_d   = op_b_shift_q >> 1;
+              md_state_d     = (multdiv_state_q == 5'd1) ? MD_LAST : MD_COMP;
             end
             default: begin
               accum_window_d = {next_reminder[31:0], op_numerator_q[multdiv_state_m1]};
               op_a_shift_d   = next_quotient;
+              md_state_d     = (multdiv_state_q == 5'd1) ? MD_LAST : MD_COMP;
             end
           endcase
-
-          md_state_d = (multdiv_state_q == 5'd1) ? MD_LAST : MD_COMP;
         end
 
         MD_LAST: begin
           unique case(operator_i)
             MD_OP_MULL: begin
               accum_window_d = res_adder_l;
-              md_state_d     = MD_IDLE;
+
+              // Note no state transition will occur if multdiv_hold is set
+              md_state_d   = MD_IDLE;
+              multdiv_hold = ~multdiv_ready_id_i;
             end
             MD_OP_MULH: begin
               accum_window_d = res_adder_l;
               md_state_d     = MD_IDLE;
+
+              // Note no state transition will occur if multdiv_hold is set
+              md_state_d   = MD_IDLE;
+              multdiv_hold = ~multdiv_ready_id_i;
             end
             MD_OP_DIV: begin
               // this time we save the quotient in accum_window_q since we do not need anymore the
@@ -268,7 +287,9 @@ module ibex_multdiv_slow (
         end
 
         MD_FINISH: begin
-          md_state_d = MD_IDLE;
+          // Note no state transition will occur if multdiv_hold is set
+          md_state_d   = MD_IDLE;
+          multdiv_hold = ~multdiv_ready_id_i;
         end
 
         default: begin

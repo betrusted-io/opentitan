@@ -5,9 +5,14 @@
 import logging as log
 from copy import deepcopy
 from pathlib import Path
+from collections import OrderedDict
 import hjson
+import sys
 
 import re
+
+# Ignore flake8 warning as the function is used in the template
+from .intermodule import im_defname, im_netname, im_portname  # noqa : F401
 
 
 def is_ipcfg(ip: Path) -> bool:  # return bool
@@ -49,9 +54,13 @@ def get_hjsonobj_xbars(xbar_path):
     """
     p = xbar_path.glob('*.hjson')
     try:
-        xbar_objs = [hjson.load(x.open('r'), use_decimal=True) for x in p]
+        xbar_objs = [
+            hjson.load(x.open('r'),
+                       use_decimal=True,
+                       object_pairs_hook=OrderedDict) for x in p
+        ]
     except ValueError:
-        raise Systemexit(sys.exc_info()[1])
+        raise SystemExit(sys.exc_info()[1])
 
     xbar_objs = [x for x in xbar_objs if is_xbarcfg(x)]
 
@@ -70,6 +79,31 @@ def get_module_by_name(top, name):
     return module
 
 
+def intersignal_to_signalname(top, m_name, s_name) -> str:
+
+    # TODO: Find the signal in the `inter_module_list` and get the correct signal name
+
+    return "{m_name}_{s_name}".format(m_name=m_name, s_name=s_name)
+
+
+def get_package_name_by_intermodule_signal(top, struct) -> str:
+    """Search inter-module signal package with the struct name
+
+    For instance, if `flash_ctrl` has inter-module signal package,
+    this function returns the package name
+    """
+    instances = top["module"] + top["memory"]
+
+    intermodule_instances = [
+        x["inter_signal_list"] for x in instances if "inter_signal_list" in x
+    ]
+
+    for m in intermodule_instances:
+        if m["name"] == struct and "package" in m:
+            return m["package"]
+    return ""
+
+
 def get_signal_by_name(module, name):
     """Return the signal struct with the type input/output/inout
     """
@@ -83,15 +117,16 @@ def get_signal_by_name(module, name):
     return result
 
 
-def add_prefix_to_signal(signal, prefix):
-    """Add prefix to module signal format { name: "sig_name", width: NN }
+def add_module_prefix_to_signal(signal, module):
+    """Add module prefix to module signal format { name: "sig_name", width: NN }
     """
     result = deepcopy(signal)
 
-    if not "name" in signal:
+    if "name" not in signal:
         raise SystemExit("signal {} doesn't have name field".format(signal))
 
-    result["name"] = prefix + "_" + signal["name"]
+    result["name"] = module + "_" + signal["name"]
+    result["module_name"] = module
 
     return result
 
@@ -131,10 +166,10 @@ def get_pad_list(padstr):
         last = first
     first = int(first, 0)
     last = int(last, 0)
-    width = first - last + 1
+    # width = first - last + 1
 
     for p in range(first, last + 1):
-        pads.append({"name": pad, "index": p})
+        pads.append(OrderedDict([("name", pad), ("index", p)]))
 
     return pads
 
@@ -173,7 +208,32 @@ def bitarray(d, width):
 def parameterize(text):
     """Return the value wrapping with quote if not integer nor bits
     """
-    if re.match('(\d+\'[hdb]\s*[0-9a-f_A-F]+|[0-9]+)', text) == None:
+    if re.match(r'(\d+\'[hdb]\s*[0-9a-f_A-F]+|[0-9]+)', text) is None:
         return "\"{}\"".format(text)
 
     return text
+
+
+def index(i: int) -> str:
+    """Return index if it is not -1
+    """
+    return "[{}]".format(i) if i != -1 else ""
+
+
+def get_clk_name(clk):
+    """Return the appropriate clk name
+    """
+    if clk == 'main':
+        return 'clk_i'
+    else:
+        return "clk_{}_i".format(clk)
+
+
+def get_reset_path(resets, name):
+    """Return the appropriate reset path given name
+    """
+    for reset in resets:
+        if reset['name'] == name:
+            return reset['path']
+
+    return "none"

@@ -11,6 +11,9 @@
   // Top level testbench name (sv module).
   tb: tb
 
+  // Simulator used to sign off this block
+  tool: vcs
+
   // Fusesoc core file used for building the file list.
   fusesoc_core: lowrisc:dv:gpio_sim:0.1
 
@@ -29,12 +32,24 @@
                 "{proj_root}/hw/dv/data/tests/tl_access_tests.hjson",
                 "{proj_root}/hw/dv/data/tests/stress_tests.hjson"]
 
+  // Add additional tops for simulation.
+  sim_tops: ["-top gpio_bind"]
+
   // Default iterations for all tests - each test entry can override this.
   reseed: 50
 
   // Default UVM test and seq class name.
   uvm_test: gpio_base_test
   uvm_test_seq: gpio_base_vseq
+
+  // Add GPIO specific exclusion files.
+
+  // Add excl files to tool_srcs so that it gets copied over to the scratch area.
+  tool_srcs: ["{proj_root}/hw/ip/gpio/dv/cov/gpio_cov_excl.el"]
+
+  // Refer to the excl file with vcs_cov_excl_files var with the rel path from tool_srcs_dir
+  // so the VCS can find it.
+  vcs_cov_excl_files: ["{tool_srcs_dir}/gpio_cov_excl.el"]
 
   // List of test specifications.
   tests: [
@@ -62,7 +77,7 @@
 
     {
       name: gpio_dout_din_regs_random_rw
-      uvm_test_seq: gpio_din_regs_random_rw_vseq
+      uvm_test_seq: gpio_dout_din_regs_random_rw_vseq
     }
 
     {
@@ -79,7 +94,7 @@
 
     {
       name: gpio_intr_with_filter_rand_intr_event
-      uvm_test_seq: gpio_intr_with_filter_rand_intr_event
+      uvm_test_seq: gpio_intr_with_filter_rand_intr_event_vseq
       run_opts: ["+en_scb=0", "+zero_delays=1", "+do_clear_all_interrupts=0"]
     }
 
@@ -108,13 +123,31 @@
     }
 
     {
+      name: gpio_stress_all_with_rand_reset
+      run_opts: ["+do_clear_all_interrupts=0"]
+    }
+
+    {
       name: gpio_csr_rw
+      run_opts: ["+do_clear_all_interrupts=0"]
+    }
+
+    {
+      name: gpio_same_csr_outstanding
       run_opts: ["+do_clear_all_interrupts=0"]
     }
 
     {
       name: gpio_csr_aliasing
       run_opts: ["+do_clear_all_interrupts=0"]
+    }
+  ]
+
+  // List of regressions.
+  regressions: [
+    {
+      name: sanity
+      tests: ["gpio_sanity"]
     }
   ]
 }

@@ -5,39 +5,28 @@
 // Flash Phy Module
 //
 //
-// This module is an early attempt to model what a custom phy module might look like
-// Long term, it is expected this module will split into its own entity under hw/ip
-// with its own set of register that support technology / node specific flash settings
-// More of those details will be worked out with future partner engagement
+// Flash phy represents the top level open source wrapper for a proprietary flash
+// module.
+// The top level flash_phy is only responsible for dispatching transactions and
+// correctly collecting the responses in order.
 
-module flash_phy #(
-  parameter int NumBanks = 2,
-  parameter int PagesPerBank = 256, // pages per bank
-  parameter int WordsPerPage = 256, // words per page
-  parameter int DataWidth   = 32, // bits per word
-
-  //Do not touch - Derived parameters
-  localparam int BankW = $clog2(NumBanks),
-  localparam int PageW = $clog2(PagesPerBank),
-  localparam int WordW = $clog2(WordsPerPage),
-  localparam int AddrW = BankW + PageW + WordW
-) (
+module flash_phy import flash_ctrl_pkg::*; (
   input clk_i,
   input rst_ni,
   input host_req_i,
   input [AddrW-1:0] host_addr_i,
   output logic host_req_rdy_o,
   output logic host_req_done_o,
-  output logic [DataWidth-1:0] host_rdata_o,
-  input flash_ctrl_pkg::flash_c2m_t flash_ctrl_i,
-  output flash_ctrl_pkg::flash_m2c_t flash_ctrl_o
+  output logic [BusWidth-1:0] host_rdata_o,
+  input flash_ctrl_pkg::flash_req_t flash_ctrl_i,
+  output flash_ctrl_pkg::flash_rsp_t flash_ctrl_o
 );
 
   // Flash macro outstanding refers to how many reads we allow a macro to move ahead of an
   // in order blocking read. Since the data cannot be returned out of order, this simply
   // does the reads in advance and store them in a FIFO
-  localparam FlashMacroOustanding = 1;
-  localparam SeqFifoDepth = FlashMacroOustanding * NumBanks;
+  localparam int FlashMacroOustanding = 1;
+  localparam int SeqFifoDepth = FlashMacroOustanding * NumBanks;
 
   // flash_phy forwards incoming host transactions to the appropriate bank but is not aware of
   // any controller / host arbitration within the bank.  This means it is possible for
@@ -57,7 +46,7 @@ module flash_phy #(
   logic [NumBanks-1:0]  host_rsp_avail;
   logic [NumBanks-1:0]  host_rsp_vld;
   logic [NumBanks-1:0]  host_rsp_ack;
-  logic [DataWidth-1:0] host_rsp_data [NumBanks];
+  logic [BusWidth-1:0]  host_rsp_data [NumBanks];
   logic                 seq_fifo_rdy;
   logic                 seq_fifo_pending;
 
@@ -70,11 +59,11 @@ module flash_phy #(
   logic [NumBanks-1:0]  init_busy;
 
   // common interface
-  logic [DataWidth-1:0] rd_data [NumBanks];
+  logic [BusWidth-1:0] rd_data [NumBanks];
 
   // select which bank each is operating on
-  assign host_bank_sel = host_req_i ? host_addr_i[PageW + WordW +: BankW] : '0;
-  assign ctrl_bank_sel = flash_ctrl_i.addr[PageW + WordW +: BankW];
+  assign host_bank_sel = host_req_i ? host_addr_i[BankAddrW +: BankW] : '0;
+  assign ctrl_bank_sel = flash_ctrl_i.addr[BankAddrW +: BankW];
 
   // accept transaction if bank is ready and previous response NOT pending
   assign host_req_rdy_o = host_req_rdy[host_bank_sel] & host_rsp_avail[host_bank_sel] &
@@ -94,7 +83,7 @@ module flash_phy #(
       .Width  (BankW),
       .Pass   (0),
       .Depth  (SeqFifoDepth)
-    ) bank_sequence_fifo (
+    ) i_bank_sequence_fifo (
       .clk_i,
       .rst_ni,
       .clr_i  (1'b0),
@@ -113,10 +102,10 @@ module flash_phy #(
     assign host_rsp_ack[bank] = host_req_done_o & (rsp_bank_sel == bank);
 
     prim_fifo_sync #(
-      .Width  (DataWidth),
+      .Width  (BusWidth),
       .Pass   (1'b1),
       .Depth  (FlashMacroOustanding)
-    ) host_rsp_fifo (
+    ) i_host_rsp_fifo (
       .clk_i,
       .rst_ni,
       .clr_i  (1'b0),
@@ -129,21 +118,17 @@ module flash_phy #(
       .rdata  (host_rsp_data[bank])
     );
 
-    prim_flash #(
-      .PagesPerBank(PagesPerBank),
-      .WordsPerPage(WordsPerPage),
-      .DataWidth(DataWidth)
-    ) u_flash (
+    flash_phy_core i_core (
       .clk_i,
       .rst_ni,
       .req_i(flash_ctrl_i.req & (ctrl_bank_sel == bank)),
-      .host_req_i(host_req_i & host_req_rdy_o & (host_bank_sel == bank)),
-      .host_addr_i(host_addr_i[0 +: PageW + WordW]),
+      .host_req_i(host_req_i & (host_bank_sel == bank)),
+      .host_addr_i(host_addr_i[0 +: BankAddrW]),
       .rd_i(flash_ctrl_i.rd),
       .prog_i(flash_ctrl_i.prog),
       .pg_erase_i(flash_ctrl_i.pg_erase),
       .bk_erase_i(flash_ctrl_i.bk_erase),
-      .addr_i(flash_ctrl_i.addr[0 +: PageW + WordW]),
+      .addr_i(flash_ctrl_i.addr[0 +: BankAddrW]),
       .prog_data_i(flash_ctrl_i.prog_data),
       .host_req_rdy_o(host_req_rdy[bank]),
       .host_req_done_o(host_req_done[bank]),

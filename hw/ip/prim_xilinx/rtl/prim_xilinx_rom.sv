@@ -13,6 +13,9 @@
  * It is possible to force the mapping to BRAM or distributed RAM by using the
  * ROM_STYLE directive in an XDC file.
  */
+
+`include "prim_assert.sv"
+
 module prim_xilinx_rom #(
   parameter  int Width     = 32,
   parameter  int Depth     = 2048, // 8kB default
@@ -35,7 +38,7 @@ module prim_xilinx_rom #(
    // instead. This severely degrades the synthesis quality for no good reason.
    logic [Width-1:0] mem [Depth];
 
-   localparam MEM_FILE = `"`ROM_INIT_FILE`";
+   localparam MEM_FILE = `PRIM_STRINGIFY(`ROM_INIT_FILE);
    initial
    begin
       $display("Initializing ROM from %s", MEM_FILE);

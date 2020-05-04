@@ -8,7 +8,9 @@ class ${name}_scoreboard extends cip_base_scoreboard #(
 class ${name}_scoreboard extends dv_base_scoreboard #(
 % endif
     .CFG_T(${name}_env_cfg),
+% if has_ral:
     .RAL_T(${name}_reg_block),
+% endif
     .COV_T(${name}_env_cov)
   );
   `uvm_component_utils(${name}_scoreboard)
@@ -69,7 +71,7 @@ class ${name}_scoreboard extends dv_base_scoreboard #(
       csr = ral.default_map.get_reg_by_offset(csr_addr);
       `DV_CHECK_NE_FATAL(csr, null)
     end
-    end else begin
+    else begin
       `uvm_fatal(`gfn, $sformatf("Access unexpected addr 0x%0h", csr_addr))
     end
 
