@@ -7,6 +7,8 @@
 // This module uses an LFSR connected to a PRINCE S-Box to provide pseudo-random data to the AES
 // module primarily for clearing registers. The LFSR can be reseeded using an external interface.
 
+`include "prim_cipher_pkg.sv"
+
 module aes_prng (
   input  logic        clk_i,
   input  logic        rst_ni,

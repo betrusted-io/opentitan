@@ -1,0 +1,1 @@
+../../prim/rtl/prim_cipher_pkg.sv
